@@ -1,0 +1,13 @@
+{
+  "name": "cloudflare-publish",
+  "version": "0.3.0",
+  "description": "Publish local HTTP or pinned SSH services from your Mac through your own Cloudflare Tunnel and Access.",
+  "author": {
+    "name": "Tiziano AI",
+    "url": "https://github.com/Tiziano-AI"
+  },
+  "homepage": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
+  "repository": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
+  "license": "MIT",
+  "keywords": ["cloudflare", "tunnel", "localhost", "macos", "access"]
+}

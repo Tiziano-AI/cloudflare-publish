@@ -1,0 +1,33 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "cloudflare-publish",
+  "version": "0.3.0",
+  "description": "Publish local HTTP or pinned SSH services from your Mac through your own Cloudflare Tunnel and Access.",
+  "author": {
+    "name": "Tiziano AI",
+    "url": "https://github.com/Tiziano-AI"
+  },
+  "homepage": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
+  "repository": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
+  "license": "MIT",
+  "keywords": ["cloudflare", "tunnel", "localhost", "macos", "access"],
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "Cloudflare Publish",
+        "shortDescription": "Share local Mac services",
+        "longDescription": "Give a running local web app, private API, authenticated callback, or pinned machine-only SSH server a stable hostname through your own Cloudflare account. Plan and manage exact-hostname publications, Access audiences, verification, token rotation, and tunnel recovery. SSH requires client-side cloudflared and your own SSH credentials. Requires a local macOS executor, a separately installed cloudflare-publish CLI and cloudflared, and your own active full DNS zone and API token. This skill-only plugin does not install services or publish anything automatically. Removing it does not stop existing publications or retire their resources.",
+        "developerName": "Tiziano AI",
+        "category": "Developer Tools",
+        "websiteURL": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
+        "composerIcon": "./skills/cloudflare-publish/assets/icon-small.svg",
+        "logo": "./skills/cloudflare-publish/assets/icon-large.png",
+        "defaultPrompt": [
+          "Use Cloudflare Publish to plan a protected hostname for my local web app.",
+          "Use Cloudflare Publish to inspect my tunnel manager and explain the next safe action."
+        ]
+      }
+    }
+  }
+}
