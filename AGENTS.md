@@ -116,19 +116,18 @@ Live manager state lives outside the repository, in
   Removing the plugin or CLI must not implicitly retire infrastructure or erase recovery state;
   README.md's Upgrade And Removal section owns the operator sequence.
 
-## Unreleased, and written to stay publishable
+## Public development and private operator overlays
 
-The canonical development repository is private; a public distribution receives reviewed snapshots,
-not the development history. Do product development at that canonical owner, not as a second engine
-in a distribution checkout. `ARCH.md` calls the package a "public-candidate"; that describes source
-fitness, not evidence of a published or operationally qualified release. No compatibility is owed
-to earlier command forms or skill text, so a change replaces the old form outright, as `CONTRIBUTING.md` already requires for
-retired names. Publishing source or the skill would be a separate decision for Tiziano. A public
-source publication uses the complete reviewed `git archive` snapshot described in CONTRIBUTING.md,
-not a visibility change or a transfer of the private development history. Snapshot acceptance does
-not clear earlier commits.
+The canonical public development repository is
+[Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish). Develop the CLI and
+plugin together here. The `tiziano-ai` marketplace pins reviewed revisions from this same complete
+source; there is no private development mirror, snapshot-copy release workflow, or second engine.
+Do not import the earlier private development history or operator material into the public
+repository. Review the actual outgoing commits before any authorized public push. Source publication,
+installed CLI selection, native plugin installation and loaded guidance remain distinct claims;
+check the consumer relevant to the work. Do not reintroduce retired command aliases.
 
-The repository is written to be publishable. Tracked docs, tests, the gate and the skill stay
+Tracked docs, tests, the gate and the skill stay
 terminal-first and must not require local app configuration, user-private skill mirrors or
 workstation secret tooling. Workstation recipes, private notes and app actions belong in ignored
 overlays (`.codex/` and `.claude/` are gitignored); the Codex app's local environment, when present,

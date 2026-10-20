@@ -1,14 +1,14 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cloudflare-publish",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Publish local HTTP or pinned SSH services from your Mac through your own Cloudflare Tunnel and Access.",
   "author": {
     "name": "Tiziano AI",
     "url": "https://github.com/Tiziano-AI"
   },
-  "homepage": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
-  "repository": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
+  "homepage": "https://github.com/Tiziano-AI/cloudflare-publish",
+  "repository": "https://github.com/Tiziano-AI/cloudflare-publish",
   "license": "MIT",
   "keywords": ["cloudflare", "tunnel", "localhost", "macos", "access"],
   "extensions": {
@@ -20,7 +20,7 @@
         "longDescription": "Give a running local web app, private API, authenticated callback, or pinned machine-only SSH server a stable hostname through your own Cloudflare account. Plan and manage exact-hostname publications, Access audiences, verification, token rotation, and tunnel recovery. SSH requires client-side cloudflared and your own SSH credentials. Requires a local macOS executor, a separately installed cloudflare-publish CLI and cloudflared, and your own active full DNS zone and API token. This skill-only plugin does not install services or publish anything automatically. Removing it does not stop existing publications or retire their resources.",
         "developerName": "Tiziano AI",
         "category": "Developer Tools",
-        "websiteURL": "https://github.com/Tiziano-AI/cloudflare-publish-plugin",
+        "websiteURL": "https://github.com/Tiziano-AI/cloudflare-publish",
         "composerIcon": "./skills/cloudflare-publish/assets/icon-small.svg",
         "logo": "./skills/cloudflare-publish/assets/icon-large.png",
         "defaultPrompt": [

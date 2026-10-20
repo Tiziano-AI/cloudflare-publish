@@ -135,11 +135,10 @@ cloudflare-publish --help
 ```
 
 The package contains portable `plugin.json`, Claude Code metadata, and one shared `skills/` tree.
-The selected public release destination is
-[Tiziano-AI/cloudflare-publish-plugin](https://github.com/Tiziano-AI/cloudflare-publish-plugin).
-This source is still a release candidate; naming that destination does not claim it has been
-published or installed. Once the reviewed snapshot and its `tiziano-ai` catalog entry are public,
-install the guidance through your host's native marketplace:
+The public development source for both CLI and plugin is
+[Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish).
+The `tiziano-ai` marketplace pins reviewed revisions from that same complete source; there is no
+separate plugin-only source repository. Install the guidance through your host's native marketplace:
 
 **Codex:**
 

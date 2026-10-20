@@ -119,9 +119,17 @@ operator guidance.
   - https://developers.openai.com/plugins/build/plugins#plugin-structure
   - https://code.claude.com/docs/en/plugins-reference#standard-layout
 - Codex local environments are app-supported project setup/action files that may be checked into a
-  repository, but this public-candidate product keeps those local app actions in ignored operator
+  repository, but this public product keeps those local app actions in ignored operator
   overlays instead of tracked public contracts.
   - `vendor:openai-docs:2026-05-12:https://developers.openai.com/codex/app/local-environments`
+
+## Source And Distribution Ownership
+
+[Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish) is the single public
+development source for the CLI and native agent plugin. The `tiziano-ai` marketplace catalogs
+reviewed commits from this repository; it is not a second source tree or development engine.
+CLI installation and each host's native plugin installation remain separate consumer selections.
+Neither source publication nor installation configures Cloudflare or changes existing manager state.
 
 ## Product Boundary
 

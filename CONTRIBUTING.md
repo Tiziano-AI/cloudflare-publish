@@ -53,29 +53,23 @@ that accidentally import from the original checkout do not establish distributio
 - When dependency reality changes, update `uv.lock` with the matching metadata instead of trying to
   treat pinned `pyproject.toml` specifiers as the source of truth.
 
-## Source Snapshot Publication
+## Public Source And Releases
 
-The publication boundary is the complete tracked tree at one reviewed commit, exported with
-`git archive`; it is not the private development repository's history or visibility. No custom
-source exporter or second file allowlist is needed. From the development checkout, select the exact
-commit and an output path outside the checkout:
+[Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish) is the single public
+development repository and complete installable plugin source. Make product changes here, not in a
+private mirror or a distribution checkout. The separate `tiziano-ai` marketplace is a thin catalog
+that pins reviewed source commits; it contains no copied runtime or skill tree.
 
-```bash
-commit="FULL_REVIEWED_COMMIT_ID"
-git archive --format=tar --prefix=cloudflare-publish/ "$commit" > /selected/output/source.tar
-```
+Keep the MIT license, source, tests, contracts, native plugin manifests, skill assets and lockfile
+together. Review the complete outgoing changes and public metadata URLs before publication. Ignoring
+operator overlays, environments, credentials, state and build outputs does not make newly tracked
+content safe. Do not import the earlier private development history into this public repository.
 
-Review the actual extracted archive before publishing it. Keep the MIT license, source, tests,
-contracts, native plugin manifests, skill assets and lockfile together. The archive excludes Git
-storage and untracked/ignored operator overlays, environments, credentials, state and build outputs;
-that exclusion does not make a newly tracked file safe. Check new contents and public metadata URLs
-at each selected commit. Only that reviewed snapshot may enter a separately authorized public
-destination; do not copy the whole checkout, attach its private history, or flip its visibility as a
-substitute. A snapshot review says nothing about secrets or third-party material in earlier commits.
-
-Validate the extracted package with `uv run python devtools/validate_package.py` and exercise setup with
-the hermetic fake-binary tests. Those checks need no Cloudflare account and do not establish native
-host activation, current provider behavior, or a first live publication.
+Keep the version in `pyproject.toml`, `uv.lock`, `plugin.json` and `.claude-plugin/plugin.json`
+aligned. After the accepted source commit is public, update the catalog's exact source revision and
+use native host operations to refresh installed plugins. CLI installation remains explicit and
+separate. Package checks need no Cloudflare account and do not establish native host activation,
+current provider behavior, or a first live publication.
 
 ## Icon Assets
 

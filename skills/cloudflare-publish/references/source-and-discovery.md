@@ -9,11 +9,11 @@
   not guess a personal checkout path or run setup as an installation side effect. This blocks
   installed operation, not explanation or work in a resolved source checkout.
 
-The selected public release destination is
-[Tiziano-AI/cloudflare-publish-plugin](https://github.com/Tiziano-AI/cloudflare-publish-plugin).
-Until the reviewed source snapshot is actually published there, treat it as a candidate destination,
-not an available release. Native plugin installation and CLI installation are separate. A local
-Claude `--plugin-dir` session does not establish persistent native installation or migration.
+The single public development and release source for the CLI and plugin is
+[Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish).
+The `tiziano-ai` marketplace pins reviewed commits from this complete source. Native plugin
+installation and CLI installation are separate. A local Claude `--plugin-dir` session does not
+establish persistent native installation or migration.
 
 ## Source and explanation
 
