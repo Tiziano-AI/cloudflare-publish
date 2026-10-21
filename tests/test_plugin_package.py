@@ -56,6 +56,50 @@ def test_package_rejects_version_drift(tmp_path: Path) -> None:
     assert "version" in completed.stderr
 
 
+def test_package_requires_native_listing_icon(tmp_path: Path) -> None:
+    """Claude presentation metadata is required without becoming shared identity."""
+
+    package = _copy_package(tmp_path / "package")
+    manifest = package / ".claude-plugin" / "plugin.json"
+    payload = json.loads(manifest.read_text())
+    del payload["icon"]
+    manifest.write_text(json.dumps(payload))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "icon metadata" in completed.stderr
+
+
+def test_native_icon_reuses_portable_listing_image(tmp_path: Path) -> None:
+    """Both hosts present the same image rather than drifting to separate artwork."""
+
+    package = _copy_package(tmp_path / "package")
+    manifest = package / ".claude-plugin" / "plugin.json"
+    payload = json.loads(manifest.read_text())
+    payload["icon"] = "./skills/cloudflare-publish/assets/icon-small.svg"
+    manifest.write_text(json.dumps(payload))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "reuse the portable listing image" in completed.stderr
+
+
+@pytest.mark.parametrize("target", ["missing.png", "../outside.png"])
+def test_listing_icons_stay_in_package(tmp_path: Path, target: str) -> None:
+    """Matching host metadata cannot admit a missing or external image."""
+
+    package = _copy_package(tmp_path / "package")
+    portable_path = package / "plugin.json"
+    portable = json.loads(portable_path.read_text())
+    portable["extensions"]["com.openai"]["interface"]["logo"] = target
+    portable_path.write_text(json.dumps(portable))
+    native_path = package / ".claude-plugin" / "plugin.json"
+    native = json.loads(native_path.read_text())
+    native["icon"] = target
+    native_path.write_text(json.dumps(native))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "missing or escaping skill reference" in completed.stderr
+
+
 @pytest.mark.parametrize("target", ["missing.md", "../../../LICENSE"])
 def test_skill_references_are_self_contained(tmp_path: Path, target: str) -> None:
     """A cached skill cannot rely on missing files or material outside its own tree."""

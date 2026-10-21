@@ -9,5 +9,6 @@
   "homepage": "https://github.com/Tiziano-AI/cloudflare-publish",
   "repository": "https://github.com/Tiziano-AI/cloudflare-publish",
   "license": "MIT",
-  "keywords": ["cloudflare", "tunnel", "localhost", "macos", "access"]
+  "keywords": ["cloudflare", "tunnel", "localhost", "macos", "access"],
+  "icon": "./skills/cloudflare-publish/assets/icon-large.png"
 }

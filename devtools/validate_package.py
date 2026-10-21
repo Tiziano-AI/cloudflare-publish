@@ -68,13 +68,18 @@ def validate_package(root: Path) -> None:
     openai = extensions.get("com.openai")
     if not isinstance(openai, dict) or openai.get("requires_local_executor") is not True:
         raise ValueError("plugin requires a local executor")
-    if not isinstance(openai.get("interface"), dict):
+    interface = openai.get("interface")
+    if not isinstance(interface, dict):
         raise ValueError("plugin listing metadata is missing")
     for path in ("hooks", "mcp.json", ".mcp.json", ".codex-plugin"):
         if (root / path).exists():
             raise ValueError(f"this skill-only package must not add an execution surface: {path}")
-    if set(native) != set(IDENTITY_FIELDS):
-        raise ValueError("Claude manifest must contain metadata only")
+    if set(native) != {*IDENTITY_FIELDS, "icon"}:
+        raise ValueError("Claude manifest must contain identity and icon metadata only")
+    icon = native.get("icon")
+    if not isinstance(icon, str) or icon != interface.get("logo"):
+        raise ValueError("Claude icon must reuse the portable listing image")
+    _validate_local_target(root / "plugin.json", root, icon)
     if not (root / "LICENSE").is_file():
         raise ValueError("LICENSE is missing from the package")
     skills = root / "skills"
