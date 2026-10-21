@@ -6,22 +6,14 @@ recovery.
 
 ## Official grounding
 
-- remote tunnel setup:
-  `https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/`
-- run parameters and `--token-file` minimum version:
-  `https://developers.cloudflare.com/tunnel/advanced/run-parameters/`
-- tunnel token handling and connection cleanup:
-  `https://developers.cloudflare.com/tunnel/advanced/tunnel-tokens/`
-- require Access protection:
-  `https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/require-access-protection/`
-- Access apps:
-  `https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/`
-- native SSH through client-side cloudflared:
-  `https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/use-cases/ssh/ssh-cloudflared-authentication/`
-- non-HTTP WebSocket transport and disconnect limitations:
-  `https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/cloudflared-authentication/`
-- API token permissions:
-  `https://developers.cloudflare.com/fundamentals/api/reference/permissions/`
+- [Remote tunnel setup](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/)
+- [Run parameters and the `--token-file` minimum version](https://developers.cloudflare.com/tunnel/reference/run-parameters/)
+- [Tunnel token handling and connection cleanup](https://developers.cloudflare.com/tunnel/reference/tunnel-tokens/)
+- [Require Access protection](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/require-access-protection/)
+- [Access applications](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
+- [Native SSH through client-side cloudflared](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/use-cases/ssh/ssh-cloudflared-authentication/)
+- [Non-HTTP WebSocket transport and disconnect limitations](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/cloudflared-authentication/)
+- [API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
 - [organization GET permissions](https://developers.cloudflare.com/api/resources/zero_trust/subresources/organizations/methods/list/)
 - [organization PUT permissions and service-token authentication behavior](https://developers.cloudflare.com/api/python/resources/zero_trust/subresources/organizations/methods/update/)
 

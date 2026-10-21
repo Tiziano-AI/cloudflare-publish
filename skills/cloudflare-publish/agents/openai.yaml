@@ -3,7 +3,7 @@ interface:
   short_description: "Publish local Mac services through Cloudflare Tunnel"
   icon_small: "./assets/icon-small.svg"
   icon_large: "./assets/icon-large.png"
-  brand_color: "#0F766E"
+  brand_color: "#AE4B2B"
   default_prompt: "Use $cloudflare-publish to plan a protected hostname for my local HTTP(S) or SSH service."
 
 policy:

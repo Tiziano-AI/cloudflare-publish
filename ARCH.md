@@ -1,5 +1,10 @@
 # cloudflare-publish Architecture
 
+`cloudflare-publish` is a macOS operator tool for publishing local HTTP, HTTPS, and
+machine-authenticated native SSH services. One manager per Mac user profile owns one remotely
+managed Cloudflare Tunnel, one user launch agent, one state manifest, and one CLI. The agent
+plugin teaches the same CLI; it adds no separate runtime or infrastructure owner.
+
 ## Recoverable mutation contract
 
 One nullable, typed `pending` transition in `state.json` owns an unfinished mutation. It records
@@ -36,92 +41,81 @@ owned DNS, Access and tokens. Local credentials/artifacts are removed last. Fail
 and the persistent lock file. Ordinary configuration writes compare the entire managed topology
 and supported fields first and refuse foreign drift instead of overwriting it.
 
-`cloudflare-publish` is a macOS-only operator tool that turns one Mac user profile into one
-Cloudflare-managed publication host for local HTTP, HTTPS, and machine-authenticated native SSH
-services. The repo owns one
-workstation-wide management surface, one shared remotely managed Cloudflare Tunnel, one user launch
-agent, one local state manifest, one canonical CLI surface, and one product-owned skill package for
-operator guidance.
-
 ## External Facts
 
 - Remotely managed tunnels are the supported API-driven posture for this product; tunnel creation
   sends `config_src: "cloudflare"` and tunnel configuration is managed through Cloudflare.
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/`
+  - [Create a remotely managed tunnel with the API](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/)
 - `cloudflared tunnel run --token-file` is a supported tunnel-run parameter for remotely managed
   tunnels and requires `cloudflared` `2025.4.0` or later in this product.
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/tunnel-run-parameters/`
+  - [Tunnel run parameters](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/run-parameters/)
 - Tunnel tokens are retrievable by API. Cloudflare recommends rotating compromised tunnel tokens,
   then deleting tunnel connections so old connectors are forced off the edge.
-  - `vendor:cloudflare-docs:2026-04-12:https://developers.cloudflare.com/tunnel/advanced/tunnel-tokens/`
+  - [Tunnel tokens and rotation](https://developers.cloudflare.com/tunnel/reference/tunnel-tokens/)
 - Listing visible accounts is a separate account-scoped API surface and requires token visibility
   to the account itself.
-  - `vendor:cloudflare-docs:2026-04-16:https://developers.cloudflare.com/api/resources/accounts/methods/list/`
+  - [List accounts](https://developers.cloudflare.com/api/resources/accounts/methods/list/)
 - Zone discovery includes the zone owner account, status, and type. A full zone implies
   Cloudflare hosts authoritative DNS, while a partial zone is a CNAME setup and is incompatible
   with this product's managed-DNS contract.
-  - `vendor:cloudflare-docs:2026-04-16:https://developers.cloudflare.com/api/resources/zones/methods/list/`
+  - [List zones](https://developers.cloudflare.com/api/resources/zones/methods/list/)
 - Access self-hosted applications are the canonical protection model for `human`, `machine`, and
   `mixed` hostnames, and the hostname must belong to an active zone in the same Cloudflare account.
-  - `vendor:cloudflare-docs:2026-04-12:https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/`
+  - [Protect a self-hosted application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
 - Updating the Zero Trust organization is a full-payload `PUT`; Cloudflare warns operators to send
   every field returned by the prior `GET` to avoid overwriting existing configuration.
-  - `vendor:cloudflare-docs:2026-04-16:https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/independent-mfa/`
-- Account, zone, and tunnel discovery endpoints are paginated API surfaces.
-  - `vendor:cloudflare-docs:2026-04-16:https://developers.cloudflare.com/api/resources/accounts/methods/list/`
-  - `vendor:cloudflare-docs:2026-04-16:https://developers.cloudflare.com/api/resources/zones/methods/list/`
-  - `vendor:cloudflare-docs:2026-04-16:https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/`
+  - [Update organization settings without dropping fields](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/independent-mfa/)
 - Access policies are deny-by-default and support explicit `email`, `email_domain`, and
   `service_token` selectors.
-  - `vendor:cloudflare-docs:2026-04-12:https://developers.cloudflare.com/cloudflare-one/access-controls/policies/`
+  - [Access policies](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/)
 - Access application policies include precedence, which defines execution order inside one
   application and therefore belongs to the managed policy contract.
-  - `vendor:cloudflare-docs:2026-04-16:https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/subresources/policies/`
+  - [Application policy API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/subresources/policies/)
 - Service tokens are the machine-auth contract. Their client secret is only displayed when
   generated, and the canonical headers are `CF-Access-Client-Id` and
   `CF-Access-Client-Secret`.
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/`
+  - [Access service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)
 - Account-level require-protection blocks hostnames without a matching Access application. The
   product represents the setting through `deny_unmatched_requests` and preserves
   `deny_unmatched_requests_exempted_zone_names`.
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/require-access-protection/`
+  - [Require Access protection](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/require-access-protection/)
 - Cloudflare account, zone, tunnel, and service-token list APIs are paginated read surfaces. The
   CLI discovery commands consume all pages before returning results.
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/api/resources/accounts/methods/list/`
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/api/resources/zones/methods/list/`
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/methods/list/`
-  - `vendor:cloudflare-docs:2026-04-26:https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/service_tokens/methods/list/`
+  - [Accounts](https://developers.cloudflare.com/api/resources/accounts/methods/list/),
+    [zones](https://developers.cloudflare.com/api/resources/zones/methods/list/),
+    [tunnels](https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/methods/list/),
+    and [service tokens](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/service_tokens/methods/list/)
 - Tunnel ingress rules must include a catch-all rule, and HTTP-origin options such as
   `httpHostHeader`, `originServerName`, and `noTLSVerify` are remotely managed.
-  - `vendor:cloudflare-docs:2026-04-12:https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/`
+  - [Origin parameters](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/)
 - `httpHostHeader` is the HTTP `Host` header forwarded from `cloudflared` to the local origin.
   Origins that reject the public hostname must set this option explicitly.
-  - `vendor:cloudflare-docs:2026-05-09:https://developers.cloudflare.com/tunnel/advanced/origin-parameters/`
+  - [HTTP Host header](https://developers.cloudflare.com/tunnel/reference/origin-parameters/)
 - A public-hostname SSH route uses an `ssh://` origin and client-side `cloudflared access ssh`.
   Cloudflare carries the transport; native SSH encryption and pinned SSH host keys protect the
   inner connection. This is not direct peer-to-peer networking or removal of Cloudflare as a
   third-party availability dependency. WebSocket transport can disconnect; applications that need
   persistent access must supervise their SSH connection separately.
-  - https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/use-cases/ssh/ssh-cloudflared-authentication/
-  - https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/cloudflared-authentication/
+  - [SSH with client-side cloudflared](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/use-cases/ssh/ssh-cloudflared-authentication/)
+  - [Access for non-HTTP applications](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/cloudflared-authentication/)
 - In the Access application API, `service_auth_401_redirect: true` requests HTTP 401 when Service
   Auth blocks a request. This is distinct from the organization-wide `strict_service_token_auth`.
-  - https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/
+  - [Access application API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/)
 - Quick Tunnels are dev-only and are not a product path for this repo.
-  - `vendor:cloudflare-docs:2026-04-12:https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/`
+  - [Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)
 - Codex scans repository skills from `.agents/skills` under the current directory and up to the
   repository root. User-private skills live under `$HOME/.agents/skills`, and skills with duplicate
   names are not merged.
-  - `vendor:openai-docs:2026-05-12:https://developers.openai.com/codex/skills#where-to-save-skills`
+  - [Where Codex discovers skills](https://developers.openai.com/codex/skills#where-to-save-skills)
 - Portable Agent Plugins discover `skills/` at the package root. OpenAI settings belong in
   `plugin.json` under `extensions.com.openai`; Claude Code reads `.claude-plugin/plugin.json` and
   the same `skills/` tree. This skill-only package adds neither hooks nor MCP servers.
-  - https://developers.openai.com/plugins/build/plugins#plugin-structure
-  - https://code.claude.com/docs/en/plugins-reference#standard-layout
+  - [Agent plugin structure](https://developers.openai.com/plugins/build/plugins#plugin-structure)
+  - [Claude Code plugin layout](https://code.claude.com/docs/en/plugins-reference#standard-layout)
 - Codex local environments are app-supported project setup/action files that may be checked into a
   repository, but this public product keeps those local app actions in ignored operator
   overlays instead of tracked public contracts.
-  - `vendor:openai-docs:2026-05-12:https://developers.openai.com/codex/app/local-environments`
+  - [Codex local environments](https://developers.openai.com/codex/app/local-environments)
 
 ## Source And Distribution Ownership
 
@@ -154,7 +148,7 @@ Neither source publication nor installation configures Cloudflare or changes exi
 - general TCP, UDP, RDP, SMB, VPN, or WARP client access
 - enabling macOS Remote Login, configuring SSH login users or their private keys, or changing
   `sshd` authorization
-- remote reverse-forwarding installation, SSH session supervision, or DGX administration
+- remote reverse-forwarding installation, SSH session supervision, or remote-machine administration
 - Cloudflare IdP setup
 - remote dashboard token rotation
 - multiple accounts or multiple zones per local manager
@@ -745,7 +739,7 @@ SSH origin and public probes use a private temporary `known_hosts` file, strict 
 and OpenSSH's signed key exchange. They do not load a user's SSH configuration, agent, private
 keys, or login credentials and do not establish an authenticated shell or forwarding session.
 Successful SSH checks prove encrypted transport to the pinned SSH server, not SSH user login,
-reverse forwarding, session persistence, or a DGX workload. The existing `origin`, `access`, and
+reverse forwarding, session persistence, or a remote workload. The existing `origin`, `access`, and
 `public_probe` groups express these distinctions; SSH adds no parallel readiness framework.
 The client-side `cloudflared` process receives Access credentials through environment variables,
 not arguments, runs with `--loglevel error` to prevent debug WebSocket headers from exposing

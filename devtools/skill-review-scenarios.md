@@ -1,6 +1,7 @@
 # Review Scenarios
 
-Use this before accepting package changes or claiming the skill remains implicit-safe.
+Use these scenarios to review skill selection, first use, and recovery before accepting package
+changes.
 
 ## Blind trigger
 

@@ -2,7 +2,8 @@
 
 ## First inspection
 
-For local manager diagnosis, use the inspection script:
+For local manager diagnosis, run the [inspection script](../scripts/inspect-manager.sh) from the
+resolved skill package directory:
 
 ```bash
 scripts/inspect-manager.sh

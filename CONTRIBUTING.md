@@ -78,7 +78,7 @@ project artwork under the root MIT license, not a Cloudflare logo or a vendor as
 source for `icon-large.png`. Rebuild the PNG locally with librsvg:
 
 ```bash
-rsvg-convert --width 1024 --height 1024 \
+rsvg-convert --width 512 --height 512 \
   skills/cloudflare-publish/assets/icon-small.svg \
   --output skills/cloudflare-publish/assets/icon-large.png
 ```
@@ -198,7 +198,7 @@ Before calling a change done:
 - keep the writer lock around the complete mutation, not just the manifest save
 - keep the repo skill package synchronized with the public product contract
 - validate `skills/cloudflare-publish/agents/openai.yaml`
-- keep `scripts/inspect-manager.sh` executable and shell-valid
+- keep `skills/cloudflare-publish/scripts/inspect-manager.sh` executable and shell-valid
 - keep skill icons structurally valid
 - re-run `uv run python devtools/validate_package.py`
 - search for stale or retired terminology when a contract name changes

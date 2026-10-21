@@ -1,8 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect x="4" y="4" width="56" height="56" rx="14" fill="#0F766E"/>
-  <g stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M25 36h-7a8 8 0 0 1-1-15.94A13 13 0 0 1 42 19a8.5 8.5 0 0 1 2 17h-5"/>
-    <path d="M32 45V27m-5 5 5-5 5 5"/>
-    <rect x="24" y="45" width="16" height="10" rx="3"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <title>Cloudflare Publish</title>
+  <desc>Editable vector artwork for the Tiziano AI plugin family. The adjacent icon-large.png is rendered from this source at 512 by 512 pixels.</desc>
+  <rect width="128" height="128" rx="28" fill="#AE4B2B"/>
+  <path transform="translate(6.4 6.4) scale(.9)" fill-rule="evenodd" clip-rule="evenodd" d="M38 96c-15.464 0-28-12.536-28-28 0-13.291 9.26-24.42 21.68-27.284C35.878 26.428 47.118 18 61 18c16.57 0 30.503 11.507 34.206 26.975C108.014 46.207 118 57.001 118 70c0 14.36-11.64 26-26 26H38zm6-37a13 13 0 1 0 11.661 18h21.678a10 10 0 1 0 0-10H55.661A13 13 0 0 0 44 59z" fill="#F8F0DE"/>
 </svg>

@@ -1,99 +1,53 @@
-# cloudflare-publish
+<img src="skills/cloudflare-publish/assets/icon-large.png" width="72" height="72" alt="">
 
-`cloudflare-publish` is a macOS-only PATH-installable CLI that turns one Mac user profile into one managed
-Cloudflare publication host. It owns one shared remotely managed Cloudflare Tunnel, one user launch
-agent, one local state manifest, and many exact-hostname HTTP, HTTPS, or native SSH publications.
-Protected audiences use Cloudflare Access; a `public` audience deliberately omits Access only when the origin
-already enforces fail-closed application authentication.
+# Cloudflare Publish
+
+Give a service running on your Mac a stable hostname through your own Cloudflare account.
+Share a web app behind a login, connect a private API to machine clients, receive authenticated
+callbacks, or reach an already configured SSH server without inbound port forwarding.
+
+`cloudflare-publish` manages the Tunnel, DNS records, and access controls. Your application,
+its data, and its start/stop policy stay on your Mac. This is a macOS CLI with an optional
+agent plugin for Codex and Claude Code, not a hosting service.
+
+[Install](#install-the-cli-and-plugin) · [First publication](#first-publication) ·
+[Commands](#common-local-commands) · [Recovery](#interrupted-changes) ·
+[Removal](#upgrade-and-removal) · [Contributing](CONTRIBUTING.md)
 
 ## What It Is For
 
-Use `cloudflare-publish` when a service is already running on this Mac and you want a stable
-Cloudflare hostname for it without deploying the app into Cloudflare compute. It is the productized
-"safe front door" from a browser, teammate, automation, provider callback, or agent to one localhost
-HTTP, HTTPS, or machine-authenticated SSH origin.
+Each publication maps one local origin to one exact hostname. Choose how clients authenticate:
 
-Good fits:
+| Audience | Use it for | Required protection |
+| --- | --- | --- |
+| `human` | Browser demos, dashboards, or web apps | Access login with allowed emails or domains |
+| `machine` | APIs, model servers, or native SSH | A publication-scoped Access service token; SSH also requires a trusted Ed25519 host-key pin |
+| `mixed` | Web apps with browser and API clients | Access login or a service token |
+| `public` | Signed callbacks or clients that cannot use Access | No Access gate; the origin must reject unauthenticated requests itself |
 
-- expose a local model or API server, such as an Ollama-style endpoint, to machine clients through a
-  publication-scoped Access service token
-- reach this Mac's already configured SSH server through a stable hostname, with Access machine
-  authentication and a pinned Ed25519 SSH host key, without inbound router port forwarding
-- share a local web app, dashboard, or demo with browser users through Cloudflare Access login
-- expose a provider callback or transport endpoint whose origin already validates every request
-  with its own application protocol and therefore cannot use Cloudflare Access headers
-- connect a native HTTPS or WebSocket client to an origin-authenticated local application when the
-  client cannot complete Access login or supply service-token headers
-- give a temporary preview, webhook receiver, or diagnostics page a stable HTTPS hostname while it
-  continues to run locally
-- verify or repair the local tunnel manager after reboot, token drift, launch-agent drift, or remote
-  Cloudflare drift
-- rotate one publication's machine token or remove one hostname without touching unrelated services
+`public` is not a shortcut for exposing an unprotected app. For a native HTTPS or WebSocket
+client, first check whether it supports Access login or service-token headers. For SSH, the server
+and user authorization must already exist; this tool does not enable Remote Login or install keys.
 
-First successful loop:
-
-1. run the local service on `127.0.0.1`
-2. check the manager with `cloudflare-publish --json doctor`
-3. preview the hostname binding with `cloudflare-publish --json publish plan ...`
-4. apply the exact-hostname publication only when ready with `cloudflare-publish publish apply ... --yes`
-5. check the declared HTTP response or pinned SSH identity and audience boundary with
-   `cloudflare-publish verify NAME --live`
-
-The application's service, data, credentials, and start/stop policy stay with the application.
-Follow the publication checks with its actual client or provider workflow when that outcome is
-part of the work; a reachable hostname alone does not establish useful application behavior.
-
-Do not use it to deploy application code, host Workers or Pages, create wildcard/path routing,
-publish protocols other than HTTP(S) or SSH, manage private networks, or expose something that is
-not already running locally.
+The Mac must remain awake, connected, and running the origin. A reachable hostname is only the
+transport result: verify the real browser, API, callback, or SSH workflow as well.
 
 ## Product Boundary
 
-The product manages:
+One manager per macOS user profile owns one Cloudflare account, one active full DNS zone,
+one shared remotely managed tunnel, and many HTTP(S) or machine-only SSH publications.
+Each publication has zero or one Access application and zero or one service token, according to
+its audience.
 
-- one macOS user profile
-- one Cloudflare account
-- one active full Cloudflare-managed DNS zone
-- one shared remotely managed tunnel
-- many exact-hostname HTTP, HTTPS, or machine-authenticated native SSH origins
-- zero or one Access application per publication, according to audience
-- zero or one service token per publication
-
-The product does not manage:
-
-- wildcard hostnames
-- path-based routing
-- private network routes
-- general TCP, UDP, RDP, SMB, VPN, or WARP publication
-- enabling macOS Remote Login, SSH users/private keys, reverse-tunnel supervisors, or remote servers
-- Cloudflare IdP setup
-- remote dashboard token rotation
-- multiple accounts or multiple zones per manager
-
-## Local Ownership
-
-The manager owns these local paths:
-
-- `~/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist`
-- `~/Library/Application Support/cloudflare-publish/state.json`
-- `~/Library/Application Support/cloudflare-publish/manager.lock`
-- `~/Library/Application Support/cloudflare-publish/tunnel-token.txt`
-- `~/Library/Application Support/cloudflare-publish/backups/<timestamp>/`
-- `~/Library/Logs/cloudflare-publish/cloudflared.out.log`
-- `~/Library/Logs/cloudflare-publish/cloudflared.err.log`
-
-The manager does not treat these legacy paths as canonical state:
-
-- `~/.cloudflared/config.yml`
-- `~/.cloudflared/cert.pem`
-
-Takeover only backs up and removes the conflicting legacy launch agent plus those two legacy files.
-It does not promise to erase every unrelated leftover in `~/.cloudflared/`.
+It does not deploy code to Workers or Pages, manage wildcard or path-based routing, publish
+other protocols, or create VPN/private-network access. Cloudflare login-method setup, dashboard
+tunnel-token rotation, remote-machine administration, and multiple accounts or zones are outside
+its scope. See [ARCH.md](ARCH.md) for the full ownership and security contract.
 
 ## Requirements
 
 - macOS
-- `uv`
+- `uv` and Python 3.12 or later (`uv` can manage the Python interpreter)
 - `cloudflared` `2025.4.0` or later
 - native OpenSSH client for SSH verification; an independently configured local SSH server and its
   trusted Ed25519 public host key for SSH publication
@@ -115,16 +69,18 @@ The CLI is standalone; the optional agent plugin teaches Codex and Claude Code h
 They install separately. The plugin requires a local macOS executor with shell access, not a
 browser-only chat or a cloud worker. It includes no Cloudflare account or hosted service.
 
-From an explicitly selected source checkout or this plugin's package root, install the CLI onto
-`PATH`:
+Clone the public source into a directory you choose, then install the CLI onto `PATH`:
 
 ```bash
+git clone https://github.com/Tiziano-AI/cloudflare-publish.git
+cd cloudflare-publish
 uv tool install --reinstall .
 ```
 
-This changes only the installed Python CLI. It does not
-copy a skill into a global directory, install cloudflared, create a background job, read credentials,
-or configure Cloudflare. Python 3.12 or later is required; `uv` manages the CLI's isolated environment.
+If you already have a source checkout or an installed plugin package containing `pyproject.toml`,
+run only the final command from that selected root. `uv` creates an isolated CLI environment.
+CLI installation does not install cloudflared, start a connector, read credentials, or configure
+Cloudflare.
 
 Check the selected CLI from outside the source directory, without credentials or network calls:
 
@@ -134,11 +90,11 @@ cloudflare-publish --version
 cloudflare-publish --help
 ```
 
-The package contains portable `plugin.json`, Claude Code metadata, and one shared `skills/` tree.
-The public development source for both CLI and plugin is
-[Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish).
-The `tiziano-ai` marketplace pins reviewed revisions from that same complete source; there is no
-separate plugin-only source repository. Install the guidance through your host's native marketplace:
+### Optional agent plugin
+
+Install the guidance through your host's native marketplace. Both the CLI and plugin come from
+[this repository](https://github.com/Tiziano-AI/cloudflare-publish); the `tiziano-ai` marketplace
+selects a reviewed source revision.
 
 **Codex:**
 
@@ -161,7 +117,7 @@ Check the installed version and enablement with `codex plugin list --json` or
 `claude plugin list --json`. Start a new host session to load newly installed guidance; an existing
 session may retain its earlier skill catalog.
 
-For an unpublished local preview only, Claude Code can load an explicitly selected checkout with
+For a local development preview, Claude Code can load an explicitly selected checkout with
 `claude --plugin-dir /path/to/cloudflare-publish`; that is not a persistent native installation.
 Do not install a second global copy of the same skill alongside the plugin.
 
@@ -169,18 +125,56 @@ Ask the agent to plan a private hostname for a local app. It should first discov
 the account and origin requirements, and stop before any setup or publication that you have not
 authorized. Plugin installation itself does not run that workflow.
 
-After installing cloudflared and preparing your own account and API token, check readiness with
-`cloudflare-publish --json doctor`. It resolves credentials and may contact Cloudflare; unlike
-`--version` and `--help`, it is not an offline installation check.
+## First Publication
 
-`doctor` is diagnostic. It exits zero when the diagnostic run completes, even when the returned
-JSON reports `"ready": false` because setup, auth, or manager state is missing.
+This example puts a local web app behind browser login. Before starting, have the
+[requirements](#requirements) ready, create an API token with the
+[required permissions](#cloudflare-api-token), and run an app at `http://127.0.0.1:3000` whose `/`
+returns HTTP 200–399. Replace `example.com` and `you@example.com` below with your zone and allowed
+email address.
 
-The repo-local development wrapper remains available:
+### 1. Set up the shared manager
 
 ```bash
-./bin/cloudflare-publish --help
+cloudflare-publish setup --zone example.com
 ```
+
+Enter the API token in the local terminal prompt, never in an agent chat. Setup selects the
+account, creates the remotely managed tunnel, stores credentials in Keychain, and starts the
+local launchd connector. If conflicting cloudflared configuration exists, stop and review the
+[takeover scope](#setup) instead of deleting it. If the manager already exists, setup refreshes
+that manager rather than creating another one.
+
+### 2. Review the publication
+
+```bash
+cloudflare-publish --json publish plan demo \
+  --hostname demo.example.com \
+  --to http://127.0.0.1:3000 \
+  --audience human \
+  --allow-email you@example.com
+```
+
+The plan changes no managed state. Check the hostname, origin, and allowed audience before applying.
+
+### 3. Apply and verify
+
+```bash
+cloudflare-publish publish apply demo \
+  --hostname demo.example.com \
+  --to http://127.0.0.1:3000 \
+  --audience human \
+  --allow-email you@example.com \
+  --yes
+cloudflare-publish verify demo --live
+```
+
+Open `https://demo.example.com` and sign in with the allowed account. `verify --live` checks
+configuration, origin response, and anonymous denial; it does not complete a human login for you.
+Keep the application running independently of the tunnel manager.
+
+For APIs or model servers, see [machine and mixed audiences](#publish). For an existing SSH
+server, follow [Publish Native SSH](#publish-native-ssh).
 
 ## Upgrade And Removal
 
@@ -204,33 +198,29 @@ the CLI and remove the plugin through the host. Teardown preserves takeover back
 
 ## Common Local Commands
 
-For local development, install dev dependencies from the checkout:
+| Task | Command |
+| --- | --- |
+| Diagnose installation, credentials, and manager state | `cloudflare-publish --json doctor` |
+| List publications | `cloudflare-publish ls` |
+| Inspect one publication | `cloudflare-publish inspect NAME` |
+| Check configuration, origin, and public access | `cloudflare-publish verify NAME --live` |
+| Inspect an interrupted operation | `cloudflare-publish repair plan` |
+| Read connector status or logs | `cloudflare-publish service status` / `cloudflare-publish service logs` |
+| Preview removal of one publication | `cloudflare-publish rm plan NAME` |
+| Inspect account-level unmatched-request protection | `cloudflare-publish guard status` |
 
-```bash
-uv sync --group dev
-```
+Replace `NAME` with a managed publication name. `doctor` reports diagnostic completion, not
+readiness: even exit zero and `ok: true` can accompany `data.ready: false`. Read `data.ready` and
+`data.checks`; use `verify` for a failing exit status when readiness checks fail.
 
-Useful terminal-first checks and lifecycle commands:
-
-- status: `cloudflare-publish --json doctor`
-- repair planning: `cloudflare-publish repair plan`
-- live verification: `cloudflare-publish verify --live`
-- repo gate: `uv run devtools/gate.py`
-- connector lifecycle: `service start`, `service stop`, `service restart`, `service logs`
-- publication inventory: `ls`
-- manager, remote-routing, Access, and origin readiness checks: `verify`
-- guard inspection: `guard status`
-- high-impact mutations: `setup`, `setup --refresh-only`, `publish apply`, `rm apply`,
-  `token rotate`, `tunnel recover apply`, `guard apply`, `teardown --yes`
-
-`verify` and `repair plan` resolve credentials, read Cloudflare, and probe origins. Their HTTP
+`doctor` resolves credentials and may contact Cloudflare. `verify` and `repair plan` also probe origins. Their HTTP
 requests use private temporary curl files; SSH checks also use private temporary known-host material
 and native OpenSSH processes without login credentials. They change no managed local or Cloudflare
 state, but are neither offline nor strict no-file-write operations. `--live` adds public-hostname probes.
 
 ## Cloudflare API Token
 
-The easiest reliable token shape is:
+Create a token scoped to the target account and zone, with these permissions:
 
 Account permissions:
 
@@ -472,8 +462,7 @@ Refresh only an already-bootstrapped manager:
 cloudflare-publish setup --refresh-only
 ```
 
-`--refresh-only` refuses to create initial manager state. It is a deliberate terminal repair command,
-not a hidden one-click action.
+`--refresh-only` refuses to create initial manager state.
 
 `setup` fails closed when:
 
@@ -654,8 +643,8 @@ After reviewing the plan, run the same `publish apply` arguments with `--yes`, t
 cloudflare-publish verify mac-ssh --live
 ```
 
-This reuses the existing shared tunnel, not a new connector or a public TCP listening port. The
-origin scheme selects `ssh_public`. Existing HTTP publications stay in the same manager.
+This reuses the existing shared tunnel, not a new connector or a public TCP listening port.
+Existing HTTP publications stay in the same manager.
 `publish apply` hands off one publication-scoped Access service token; keep its secret in private
 machine credential storage, not chat, process arguments, tracked files, or shell history.
 
@@ -752,8 +741,7 @@ count, including in a `verify_failed` error result.
 
 An on-demand application's unavailable origin is still a readiness failure. Verification does not
 start that application or claim that it is always available. A configured 404/405 response checks
-the declared probe behavior, not authenticated application use, successful email receipt, native
-device control, generated-video upload, or model inference.
+the declared probe behavior, not authenticated application use or a complete client workflow.
 
 ## Tunnel Recovery
 
@@ -851,6 +839,22 @@ holds it and remains safe to reuse for a later setup.
 
 `setup`, `setup --refresh-only`, `publish apply`, `token rotate`, `guard apply`, `rm apply`,
 `teardown --yes`, `setup --takeover`, and `tunnel recover apply` are all explicit-impact commands.
+
+## Local Ownership
+
+The manager owns these local paths:
+
+- `~/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist`
+- `~/Library/Application Support/cloudflare-publish/state.json`
+- `~/Library/Application Support/cloudflare-publish/manager.lock`
+- `~/Library/Application Support/cloudflare-publish/tunnel-token.txt`
+- `~/Library/Application Support/cloudflare-publish/backups/<timestamp>/`
+- `~/Library/Logs/cloudflare-publish/cloudflared.out.log`
+- `~/Library/Logs/cloudflare-publish/cloudflared.err.log`
+
+It does not treat `~/.cloudflared/config.yml` or `~/.cloudflared/cert.pem` as canonical state.
+Takeover backs up and removes only those two files and the conflicting legacy launch agent;
+it leaves unrelated files in `~/.cloudflared/` alone.
 
 ## Secret Handling
 

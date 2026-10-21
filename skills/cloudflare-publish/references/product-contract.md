@@ -69,11 +69,11 @@ The product does not manage:
 
 - `cloudflare-publish --json doctor`
 - `cloudflare-publish --json discover accounts`
-- `cloudflare-publish --json discover zones`
-- `cloudflare-publish --json discover zone`
-- `cloudflare-publish --json discover tunnels`
+- `cloudflare-publish --json discover zones --account-id ACCOUNT`
+- `cloudflare-publish --json discover zone example.com --account-id ACCOUNT`
+- `cloudflare-publish --json discover tunnels --account-id ACCOUNT`
 - `cloudflare-publish --json discover tunnel ID --account-id ACCOUNT --zone-id ZONE`
-- `cloudflare-publish --json discover organization`
+- `cloudflare-publish --json discover organization --account-id ACCOUNT`
 - `cloudflare-publish setup`
 - `cloudflare-publish setup --refresh-only`
 - `cloudflare-publish repair plan`
@@ -85,20 +85,25 @@ The product does not manage:
 - `cloudflare-publish service stop`
 - `cloudflare-publish service restart`
 - `cloudflare-publish service logs`
-- `cloudflare-publish publish plan`
-- `cloudflare-publish publish apply --yes`
-- `cloudflare-publish inspect`
+- `cloudflare-publish publish plan NAME --hostname app.example.com --to http://127.0.0.1:3000 --audience machine`
+- `cloudflare-publish publish apply NAME --hostname app.example.com --to http://127.0.0.1:3000 --audience machine --yes`
+- `cloudflare-publish ls`
+- `cloudflare-publish inspect NAME`
 - `cloudflare-publish verify`
 - `cloudflare-publish tunnel recover plan`
 - `cloudflare-publish tunnel recover apply --yes`
-- `cloudflare-publish token rotate --yes`
+- `cloudflare-publish token rotate NAME --yes`
 - `cloudflare-publish token rotate NAME --recover --yes`
 - `cloudflare-publish guard status`
 - `cloudflare-publish guard plan`
 - `cloudflare-publish guard apply --yes`
-- `cloudflare-publish rm plan`
-- `cloudflare-publish rm apply --yes`
+- `cloudflare-publish rm plan NAME`
+- `cloudflare-publish rm apply NAME --yes`
 - `cloudflare-publish teardown --yes`
+
+Replace `NAME`, `ID`, `ACCOUNT`, `ZONE`, and the example origin/hostname with the intended values.
+These forms show syntax, not permission to run mutations. See [Operator Recipes](operator-recipes.md)
+for prerequisites and the review/apply sequence.
 
 Tracked public surfaces are terminal-first and do not require local app actions, ignored operator
 notes, user-private skill mirrors, or workstation secret tooling. Local app action recipes can exist

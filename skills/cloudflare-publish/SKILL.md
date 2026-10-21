@@ -4,52 +4,28 @@ description: "Publish, update, verify, recover, or remove local HTTP(S) or machi
 ---
 # Cloudflare Publish
 
-For interrupted writes, use `repair plan` before any retry. The canonical manifest owns one pending
-transition: repeat its original request to resume; do not substitute setup refresh, another
-mutation, or a blind retry of an unknown POST. `repair resolve --operation ID --resource-id ID
---yes` validates the exact saved creation; `--absent` instead must prove absence before retry.
-Neither finishes or forgets the enclosing mutation. Metadata cannot restore a token secret: use
-`repair retire-token --operation ID --resource-id ID --yes` only for the pending publication's
-lost-secret candidate, then repeat its publication command. A completed publication's missing
-secret needs explicit `token rotate NAME --yes`; an unknown rotation needs `token rotate NAME
---recover --yes`. Never erase pending state or silently rotate during publication reconciliation.
-Protected HTTP and SSH ingress uses native per-route Access JWT validation.
-Never equate routing/policy changes with retroactive token revocation or termination of established
-SSH/WebSocket sessions. Teardown retains Access until the exact tunnel is confirmed deleted.
-
-One local HTTP, HTTPS, or machine-authenticated SSH service on this Mac maps to one exact hostname
-in the operator's own Cloudflare account and active full DNS zone. One remotely managed tunnel carries all managed
-publications. Protected audiences use Cloudflare Access; `public` omits Access only when the origin
-already enforces fail-closed request authentication.
+This manager maps a running local HTTP(S) or machine-authenticated SSH service to one exact hostname
+in the operator's own Cloudflare account and active full DNS zone. One remotely managed tunnel carries
+all managed publications. Protected audiences use Cloudflare Access; `public` omits Access only
+when the origin already enforces fail-closed request authentication.
 
 This plugin supplies guidance, not an account or a running service. It installs no CLI, credentials,
 connector, DNS records, or Access policies automatically. Discover the separately installed
 `cloudflare-publish` command before operating it; see Source And Discovery for explicit setup.
 Disabling or removing the plugin leaves the CLI, connector, publications, and credentials in place.
 
+For interrupted writes, start with `repair plan`. Never erase pending state or blindly repeat a
+resource creation whose result is unknown; follow [Interrupted writes](#interrupted-writes).
+
 ## Use when
 
-- the user wants to publish, update, verify, recover, rotate, or remove a local HTTP, HTTPS, or SSH
-  service behind the shared Tunnel and Access manager
-- the user wants to share a local web demo, private API, or application-authenticated provider
-  callback on one exact Cloudflare hostname
-- a native HTTPS or WebSocket client needs to reach an already authenticated local application
-  through one exact hostname
-- the user wants a stable SSH hostname for this Mac without dynamic DNS or inbound port forwarding
-- the user asks what this repo/product is for, whether it is useful, or which first-success loop to
-  try with a local publication
-- the task concerns the real `cloudflare-publish` product state on this Mac
-- the task concerns terminal-first local status, repair planning, live verification, or gate
-  validation
-- operator recovery or verification is needed for the local manager or one managed publication
+- publishing, updating, verifying, or removing a local web app, API, authenticated callback,
+  native-client endpoint, or SSH service through this manager
+- inspecting or recovering manager state, rotating publication tokens, or repairing the connector
+- explaining the product or changing its source, skill, or terminal-first validation
 
-## Do not use when
-
-- the task is generic Cloudflare development or platform choice unrelated to the local product
-- the user wants to deploy code into Workers or Pages rather than expose a running local origin
-- the work concerns wildcard routing, path routing, private-network connectors, general VPN/UDP/TCP,
-  or publication kinds other than HTTP(S) and SSH
-- the request concerns neither this product's purpose/source nor a local manager or publication
+Do not use it for generic Cloudflare architecture, Workers or Pages deployment, wildcard/path
+routing, private-network or VPN access, other protocols, or services that do not run on this Mac.
 
 ## Inputs
 
@@ -138,6 +114,23 @@ and cleanup waits for the exact configuration version on all observed active con
 or stale replica application keeps the operation pending. Refresh does not resurrect a withdrawn
 route. Use `setup` for owned local token-file or launch-agent repair only when no incompatible
 transition is pending.
+
+## Interrupted writes
+
+The canonical manifest owns one pending transition. Repeat its original request to resume; do not
+substitute setup refresh, another mutation, or a blind retry of an unknown POST.
+
+`repair resolve --operation ID --resource-id ID --yes` validates the exact saved creation;
+`--absent` instead must prove absence before retry. Neither finishes or forgets the enclosing
+mutation. Metadata cannot restore a token secret: use
+`repair retire-token --operation ID --resource-id ID --yes` only for the pending publication's
+lost-secret candidate, then repeat its publication command. A completed publication's missing
+secret needs explicit `token rotate NAME --yes`; an unknown rotation needs
+`token rotate NAME --recover --yes`. Never silently rotate during publication reconciliation.
+
+Protected HTTP and SSH ingress uses native per-route Access JWT validation. Do not treat routing
+or policy changes as proof of retroactive JWT revocation or termination of established SSH/WebSocket
+sessions. Teardown retains Access until the exact tunnel is confirmed deleted.
 
 ## References
 
