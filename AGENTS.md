@@ -23,7 +23,7 @@ The connector runs with `--token-file`, so every launch-agent path keeps requiri
   publication, verification and organization contracts, setup/recover/teardown sequences and the
   fail-closed rules.
 - `README.md` owns operator guidance: installation, API-token shape, commands and troubleshooting.
-- `CONTRIBUTING.md` lists what the gate runs, the test strategy, the `uv.lock` policy, and the
+- `CONTRIBUTING.md` lists what the gate runs, the test strategy, the dependency-lock policy, and the
   surfaces to re-check when behavior changes.
 - `skills/cloudflare-publish/` is the single native plugin skill source.
 - `plugin.json` and `.claude-plugin/plugin.json` own package identity; keep name, version and license
@@ -66,10 +66,16 @@ Live manager state lives outside the repository, in
 
 ## Working in the source
 
-- Run Python tooling only through `uv`; `uv sync --group dev` installs the dev tools.
+- Run Python tooling only through `uv`; `uv sync --group dev` installs the Python dev tools.
+  Install the official npm-based basedpyright locally with `npm ci --include=dev`, using npm 11 or
+  later and Node 24.22.1+ on the 24.x line or 26.12.1+ on the 26.x line. `devEngines` rejects older
+  runtimes before install or typecheck; `.npmrc` disables dependency lifecycle scripts and optional
+  packages. Do not restore the Python basedpyright package: it selects a separately bundled Node
+  runtime instead of the developer's patched Node.
 - `uv run devtools/gate.py` is the gate: ruff lint and format check, basedpyright, pytest, the
-  wrapper's syntax and `--help`, plugin validation, and shellcheck and shfmt when installed. A repo
-  or skill change is incomplete until it passes.
+  wrapper's syntax and `--help`, plugin validation, and shellcheck and shfmt when installed. The
+  typecheck invokes the repository-local npm binary, with no download, global fallback or bootstrap.
+  A repo or skill change is incomplete until it passes.
 - The test suite is hermetic: it runs fake `curl`, `cloudflared`, `ssh`, `launchctl`, `security` and
   `brew` binaries against a fake Cloudflare API in a temporary `HOME`. A green gate therefore says
   nothing about live Cloudflare behavior, the installed command or native plugin activation. When

@@ -2,7 +2,23 @@
 
 ## Canonical Commands
 
-Run the canonical gate from repository root:
+Prepare the development dependencies explicitly from repository root. Use npm 11 or later and a
+patched Node runtime: 24.22.1 or later on the 24.x line, or 26.12.1 or later on the 26.x line.
+
+```bash
+uv sync --group dev
+npm ci --include=dev
+```
+
+The npm manifest is development-only and marked `private: true` to prevent npm publication. Its
+`devEngines` checks run before npm install, ci, and run commands; they reject runtimes below these
+security floors. `.npmrc` disables dependency lifecycle scripts and omits optional packages, so the
+batch checker does not install its optional native file watcher. Optional dependencies remain
+recorded in the lockfile, not installed. Use basedpyright's official npm package, not its Python
+package: the Python launcher selects a separate bundled Node runtime, so patching the Node on PATH
+would not patch that checker.
+
+Run the canonical gate:
 
 ```bash
 uv run devtools/gate.py
@@ -16,7 +32,8 @@ The gate runs:
 
 - `ruff check .`
 - `ruff format --check .`
-- `basedpyright` over `src`, `devtools`, and the typed fake-binary test surface
+- `npm run typecheck`, using only the local basedpyright binary over `src`, `devtools`, and
+  the typed fake-binary test surface; it never downloads a missing checker or selects a global copy
 - `pytest`
 - `bash -n bin/cloudflare-publish`
 - `./bin/cloudflare-publish --help`
@@ -40,18 +57,26 @@ build a wheel with `uv build`, install it into an isolated tool directory, and e
 `--help`, and a local read from outside the checkout with an empty temporary user directory. This
 checks the built CLI, not live Cloudflare or native plugin activation.
 
-Check both distribution forms. The wheel owns the CLI runtime; `MANIFEST.in` keeps the source
-distribution complete with developer contracts, native plugin manifests, skill assets, lockfile,
-gate, tests, `conftest.py`, and fake-binary helpers. Extract the source distribution outside the
-checkout, validate its plugin package, and exercise its tests there. Metadata inspection or tests
-that accidentally import from the original checkout do not establish distribution closure.
+Check both distribution forms. The wheel owns the standard-library-only Python CLI runtime; Node,
+npm and basedpyright are not operator dependencies. `MANIFEST.in` keeps the source distribution
+complete with developer contracts, native plugin manifests, skill assets, both dependency manifests
+and lockfiles, `.npmrc`, gate, tests, `conftest.py`, and fake-binary helpers, but no installed
+`node_modules`. Extract the source distribution outside the checkout, prepare its development
+dependencies there, and run its complete gate. Verify that imports select the extracted source.
+Metadata inspection or tests that accidentally import from the original checkout do not establish
+distribution closure.
 
 ## Dependency Lock Policy
 
-- `uv.lock` is the canonical pinned dependency snapshot.
-- `pyproject.toml` dependency ranges are the input policy, not the canonical lock state.
-- When dependency reality changes, update `uv.lock` with the matching metadata instead of trying to
-  treat pinned `pyproject.toml` specifiers as the source of truth.
+- `uv.lock` is the canonical pinned Python dependency snapshot. `package-lock.json` independently
+  pins the development-only npm checker and records its artifact integrity.
+- `pyproject.toml` and `package.json` are input policy, not substitutes for their resolved locks.
+- When dependencies change, update the corresponding manifest and lock together. Use `npm ci`
+  rather than an unpinned `npx` invocation to reproduce the checker.
+- Keep basedpyright in one dependency owner: npm only. The Python closure must not reacquire its
+  bundled Node wheel. The runtime CLI and its installation remain Python-only.
+- Revisit the Node security floors when the supported lines receive security fixes; they establish
+  a minimum accepted runtime, not a permanent security clearance.
 
 ## Public Source And Releases
 

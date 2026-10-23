@@ -1,5 +1,6 @@
 include .gitignore AGENTS.md ARCH.md CONTRIBUTING.md LICENSE Makefile README.md
 include plugin.json pyproject.toml uv.lock
+include .npmrc package.json package-lock.json
 include .claude-plugin/plugin.json
 include bin/cloudflare-publish
 recursive-include src *.py
@@ -11,6 +12,7 @@ global-exclude *.py[cod] .DS_Store
 prune .codex
 prune .claude
 prune .venv
+prune node_modules
 prune .pytest_cache
 prune .ruff_cache
 prune .basedpyright

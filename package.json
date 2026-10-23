@@ -1,0 +1,22 @@
+{
+  "name": "cloudflare-publish-devtools",
+  "private": true,
+  "scripts": {
+    "typecheck": "./node_modules/.bin/basedpyright"
+  },
+  "devDependencies": {
+    "basedpyright": "1.40.2"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.22.1 || ^26.12.1",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11",
+      "onFail": "error"
+    }
+  }
+}

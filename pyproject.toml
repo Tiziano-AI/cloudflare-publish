@@ -17,7 +17,6 @@ cloudflare-publish = "cloudflare_publish.cli:entrypoint"
 
 [dependency-groups]
 dev = [
-  "basedpyright",
   "pytest",
   "ruff",
 ]

@@ -17,7 +17,7 @@ def main() -> int:
     commands = [
         [sys.executable, "-m", "ruff", "check", "."],
         [sys.executable, "-m", "ruff", "format", "--check", "."],
-        [sys.executable, "-m", "basedpyright"],
+        ["npm", "run", "typecheck"],
         [sys.executable, "-m", "pytest"],
         ["bash", "-n", "bin/cloudflare-publish"],
         ["./bin/cloudflare-publish", "--help"],
