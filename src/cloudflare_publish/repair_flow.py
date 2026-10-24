@@ -16,7 +16,6 @@ from cloudflare_publish.cloudflare_contract import (
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
 from cloudflare_publish.json_types import JsonArray, JsonObject
-from cloudflare_publish.keychain import Keychain
 from cloudflare_publish.models import (
     AppPaths,
     ManagedPublication,
@@ -24,6 +23,7 @@ from cloudflare_publish.models import (
     PendingTransition,
     StateManifest,
 )
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import now_rfc3339, write_manifest
 from cloudflare_publish.workflow_support import load_api_token, require_manifest
 
@@ -31,7 +31,7 @@ from cloudflare_publish.workflow_support import load_api_token, require_manifest
 def run_repair_resolve(
     *,
     paths: AppPaths,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     operation_id: str,
     resource_id: str | None,
@@ -237,7 +237,7 @@ def _require_absence(
 def run_repair_retire_token(
     *,
     paths: AppPaths,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     operation_id: str,
     resource_id: str,
@@ -263,7 +263,7 @@ def retire_candidate_token(
     path: Path,
     manifest: StateManifest,
     api: CloudflareApi,
-    keychain: Keychain,
+    keychain: SecretStore,
     operation_id: str,
     resource_id: str,
 ) -> StateManifest:
@@ -501,7 +501,7 @@ def _save(path: Path, manifest: StateManifest, pending: PendingTransition) -> St
 
 def _api(
     paths: AppPaths,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     manifest: StateManifest,
     token: str | None,

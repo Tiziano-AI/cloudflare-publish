@@ -1,9 +1,61 @@
 # cloudflare-publish Architecture
 
-`cloudflare-publish` is a macOS operator tool for publishing local HTTP, HTTPS, and
-machine-authenticated native SSH services. One manager per Mac user profile owns one remotely
-managed Cloudflare Tunnel, one user launch agent, one state manifest, and one CLI. The agent
+`cloudflare-publish` is a macOS and Linux operator tool for publishing local HTTP, HTTPS, and
+machine-authenticated native SSH services. One manager per host/user profile owns one distinct remotely
+managed Cloudflare Tunnel, one native user service, one state manifest, and one CLI. The agent
 plugin teaches the same CLI; it adds no separate runtime or infrastructure owner.
+
+## Host platform contract
+
+macOS retains its existing launchd, Keychain and `~/Library` ownership. Linux supports headless
+hosts with systemd user services (systemd 240 or newer), with DGX ARM64 as this extension's
+deployment target, not system services, root daemons,
+containers without a user manager, or a Mac relay. Each independent host creates its own tunnel;
+copying a manager manifest or tunnel credential from another host is not bootstrap. A single
+host's publications share only that host's tunnel. HTTP/WSS application traffic goes directly
+through Cloudflare to that host; publishing does not move inference or application execution.
+
+Linux owns `~/.local/state/cloudflare-publish/` for its atomic manifest, persistent lock, runtime
+token, private credentials and logs, and
+`~/.config/systemd/user/cloudflare-publish.service` for its canonical unit. The service uses an
+absolute executable, the existing `tunnel run --token-file PATH` argument contract, restart on
+failure, restrictive umask and append-only stdout/stderr file destinations. Native `systemctl
+--user` owns enable/start/stop/restart and user-manager readback; stop disables automatic startup
+and confirms inactivity. Teardown atomically renames only the owned inactive/disabled unit to
+`~/.config/systemd/user/.cloudflare-publish.service.retiring`, reloads the user manager, and requires
+native not-found/inactive/disabled/PID-zero evidence before deleting that custody file. Failed or
+interrupted reload/removal resumes through `teardown --yes`, validating retained bytes and cached
+native ownership before retrying. Setup/start refuse incomplete retirement; missing unit bytes
+without custody never authorize deletion or adoption of a cached foreign definition.
+The systemd user manager must already be usable; unattended operation across logout/reboot also
+requires the operator to arrange user lingering. Setup diagnoses this before creating remote
+resources. It never invokes sudo, enables lingering, installs system packages on Linux, or
+changes another service. `--install-deps` remains the explicit Homebrew-only macOS convenience.
+Linux refuses legacy takeover: an operator must explicitly resolve conflicting legacy files or
+services outside this product rather than letting it adopt system-wide ownership.
+
+Linux persistent secrets are printable tokens in one file per opaque account reference under
+`~/.local/state/cloudflare-publish/credentials/`. The directory must be owned by the current UID,
+mode 0700; files must be owned regular single-link files, mode 0600, opened without following
+symlinks. Private atomic replacement and exact readback are required; unsafe existing paths,
+failed writes and unconfirmed deletion fail closed without echoing values. This is local POSIX
+access control, **not encryption at rest**, a hardware vault or protection from root/the same UID.
+No desktop keyring session, cloud secret broker or credential in process arguments is needed.
+The existing manifest's `*_keychain_account` fields remain stable opaque account references for
+actual macOS state consumers; their store is selected by the host, not by copying Mac secrets.
+
+Shared workflows use the native service and secret-store contracts; OS-specific serialization,
+commands and storage stay in their adapters. Unsupported platforms fail before mutation. Local
+configuration-application evidence still requires the canonical service PID's exact loopback
+listener (using `lsof` on both platforms), readiness, tunnel/client identity and applied config,
+with ownership rechecks. Merely enabling a systemd unit is not connector/application evidence.
+Hermetic platform tests are not Linux/DGX live acceptance or approval to expose a hostname.
+
+Origin-authenticated `public` remains the route for applications whose web/iPhone clients cannot
+supply Cloudflare Access service-token headers or browser login. The application must enforce
+its own fail-closed device/session authorization, including HTTPS/WSS and pairing. A public
+readiness response does not prove that authorization. Endpoint names, API credentials/grants,
+Cloudflare mutations and public source/catalog publication require their separate authority.
 
 ## Recoverable mutation contract
 
@@ -129,14 +181,14 @@ Neither source publication nor installation configures Cloudflare or changes exi
 
 `cloudflare-publish` manages:
 
-- one macOS user profile
+- one supported host/user profile
 - one Cloudflare account
 - one active full Cloudflare-managed DNS zone
-- one shared remotely managed tunnel
+- one distinct remotely managed tunnel, shared by that host's publications only
 - many exact-hostname HTTP, HTTPS, or machine-authenticated native SSH publications
-- one local launchd-managed `cloudflared` connector
+- one local native user-service-managed `cloudflared` connector
 - one local state manifest
-- one macOS Keychain service namespace
+- one host-native credential store (macOS Keychain namespace or Linux private files)
 - one canonical public product skill source at `skills/cloudflare-publish/`, discovered and owned
   by the plugin host rather than copied into a global skill directory by the CLI installer
 
@@ -157,7 +209,7 @@ Neither source publication nor installation configures Cloudflare or changes exi
 ## Canonical Flow
 
 `bin/cloudflare-publish` → `cloudflare_publish.cli` → workflow modules → adapters (`curl`,
-`cloudflared`, `launchctl`, `security`) → local macOS state + Cloudflare API
+`cloudflared`, native user service, host credential store) → local host state + Cloudflare API
 
 Only one path owns each behavior:
 
@@ -170,7 +222,7 @@ Only one path owns each behavior:
 - `publish plan` owns create-or-update previews for one publication
 - `publish apply` owns create-or-update of one publication
 - `verify` owns manager, routing, origin, Access, and optional public-hostname readiness checks
-- `service` owns local launchd connector status, start, stop, restart, and log visibility
+- `service` owns native local connector status, start, stop, restart, and log visibility
 - `tunnel recover plan` owns post-dashboard-rotation and incident repair previews
 - `tunnel recover apply` owns post-dashboard-rotation and incident repair for the shared tunnel token
 - `rm plan` owns publication retirement previews
@@ -183,7 +235,7 @@ Only one path owns each behavior:
 
 ## Local Ownership
 
-The repo owns these local paths:
+On macOS the product owns these local paths:
 
 - `~/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist`
 - `~/Library/Application Support/cloudflare-publish/state.json`
@@ -193,7 +245,8 @@ The repo owns these local paths:
 - `~/Library/Logs/cloudflare-publish/cloudflared.out.log`
 - `~/Library/Logs/cloudflare-publish/cloudflared.err.log`
 
-The repo inspects but does not canonically own:
+Linux paths and custody are defined in Host platform contract above; no macOS paths are selected
+on Linux. On macOS the product inspects but does not canonically own:
 
 - `~/Library/LaunchAgents/com.cloudflare.cloudflared.plist`
 - `~/.cloudflared/config.yml`
@@ -204,12 +257,12 @@ Those three legacy surfaces are the generic local takeover boundary. Other lefto
 
 Secrets are stored as follows:
 
-- Cloudflare API token: macOS Keychain after setup; optional bootstrap ingress from an operator-owned
+- Cloudflare API token: host credential store after setup; optional bootstrap ingress from an operator-owned
   private dotenv file only when `CLOUDFLARE_PUBLISH_DOTENV` points at an absolute path outside the
   repository
-- Access service-token secret: macOS Keychain
+- Access service-token secret: host credential store
 - tunnel runtime token: local `tunnel-token.txt` with strict permissions because the unattended
-  launch agent must read it
+  connector must read it
 
 The private dotenv is an explicit operator convenience, not a public setup dependency. The product
 does not infer a workstation secret root, does not read master secret pools, and rejects symlinked or
@@ -274,12 +327,12 @@ API-token resolution precedence:
 - explicit `--api-token` for local emergency or tests
 - process environment `CLOUDFLARE_API_TOKEN`
 - private dotenv pointed at by `CLOUDFLARE_PUBLISH_DOTENV`, key `CLOUDFLARE_API_TOKEN`
-- Keychain, when a local manager manifest exists
+- host credential store, when a local manager manifest exists
 
 Initial interactive setup also prompts for the API token when no token flag, process environment
-value, or configured private-dotenv value is present and stdin is a TTY. Keychain remains the
+value, or configured private-dotenv value is present and stdin is a TTY. The host store remains the
 persistent product store after setup. The private dotenv is a local bootstrap and noninteractive
-ingress surface, not a replacement for Keychain. Operator-facing docs prefer the interactive prompt,
+ingress surface, not a replacement for that store. Operator-facing docs prefer the interactive prompt,
 an explicit private dotenv, or a short-lived local `CLOUDFLARE_API_TOKEN` shell environment over
 token-on-argv examples. The explicit `--api-token` flag remains a supported CLI contract for local
 terminal use, tests, and emergency noninteractive operation; agents do not ask users to paste token
@@ -389,13 +442,17 @@ policy, or are explicit-impact operations.
 
 The `service` command group owns only local connector process lifecycle and log visibility. It does
 not reconcile Cloudflare remote resources, rewrite tunnel configuration, rotate tokens, or mutate
-publication state. It fails closed unless the existing launch-agent plist uses the canonical label,
-manager token file, and a `cloudflared` binary with `--token-file` support. Use `setup` for manager
-refresh and `verify` for remote contract validation.
+publication state. It fails closed unless the existing native service definition uses the canonical
+identity, manager token file, and a `cloudflared` binary with `--token-file` support. On Linux it also
+checks the loaded fragment and rejects drop-ins or effective executable drift; it does not start
+foreign definitions. Use `setup` for manager refresh and `verify` for remote contract validation.
 
 Launch-agent reinstall paths call `launchctl bootout`, wait boundedly for launchd to unregister the
 old job, then call `launchctl bootstrap`. This keeps refresh and recovery from racing launchd cleanup
 and surfacing misleading bootstrap errors while the previous connector is still being removed.
+Linux reinstall instead validates ownership, disables/stops the old owned unit, atomically writes
+the canonical unit, reloads the user manager, then enables/starts it. A stopped disabled unit can
+remain loaded by systemd without being an active or automatically restarting connector.
 
 ## Cloudflare Token Contract
 
@@ -505,7 +562,7 @@ origin options. The origin scheme selects the kind; there is no independent kind
 SSH publication store.
 
 Existing manifests without `pending` remain readable as completed state. Pending state stores only
-the current unfinished operation, not history. New service tokens use operation-specific Keychain
+the current unfinished operation, not history. New service tokens use operation-specific credential
 accounts so stale credentials from a retired token cannot masquerade as a recovered new secret.
 Reused existing tokens retain their real stored reference. Initial setup keeps the configured
 logical tunnel name, while its remote resource name carries `:<operation-id>` for exact creation
@@ -615,11 +672,11 @@ reported by the connections API is authoritative for that connector: a conflicti
 be overridden by a local observation.
 
 When the API omits a connector's applied version, native local evidence may fill only that missing
-value for the exact canonical launchd-managed connector. Discover a loopback listener owned by
-that launchd PID, without scanning ports or reading process arguments, environment, tokens or
+value for the exact canonical native-service-managed connector. Discover a loopback listener owned by
+that service PID, without scanning ports or reading process arguments, environment, tokens or
 logs. Read the native `/ready`, `/diag/tunnel` and `/config` endpoints directly, without a proxy.
 The same listener must identify the exact active API client and selected tunnel and report the
-exact applied target version. Recheck the launchd PID, listener ownership and native identity
+exact applied target version. Recheck the service PID, listener ownership and native identity
 across the observation; a process replacement or identity change invalidates it. The local
 evidence does not stand in for remote configuration equality or supply evidence for another
 replica.
@@ -633,10 +690,10 @@ lock, future-replica guarantee, token-revocation proof or session-drainage proof
 
 Initial setup order:
 
-1. ensure local tool availability, including `cloudflared` `2025.4.0` or later
+1. ensure local tool availability, including `cloudflared` `2025.4.0` or later, and Linux user-manager/linger prerequisites before remote effects
 2. ensure manager directories exist
 3. inspect canonical manager state plus conflicting legacy ownership
-4. require explicit `--takeover` if local legacy ownership exists
+4. require explicit `--takeover` for backup-safe macOS legacy ownership; refuse Linux takeover/conflicts
 5. resolve API token, account, and zone
 6. fail closed if the selected zone does not belong to the selected account
 7. fail closed unless the selected zone is `active` and `full`
@@ -646,7 +703,7 @@ Initial setup order:
 11. if takeover is active, persist backup ownership before removing the exact backed-up conflicts
 12. persist the operation-specific tunnel creation marker before POST; persist its returned ID
 13. initialize the canonical shared remote configuration and retain its returned version
-14. fetch the tunnel runtime token, write its private file, install/start the canonical launch agent
+14. fetch the tunnel runtime token, write its private file, install/start the canonical native user service
 15. require an active connector and exact-version application by all observed active replicas
 16. clear the completed pending setup; any interruption resumes from surviving ownership
 
@@ -654,12 +711,12 @@ Refresh setup order:
 
 1. require an existing manifest
 2. refuse account, zone, or tunnel-name changes without teardown
-3. load the API token from CLI or Keychain
+3. load the API token from CLI or the host store
 4. fetch the existing tunnel and organization
 5. reject any unrelated unfinished operation and unexpected full-configuration drift
 6. persist refresh custody and refreshed manager metadata; optionally store the supplied API token
 7. upgrade only the exact owned legacy configuration or reapply the exact guarded configuration
-8. fetch/rewrite the tunnel token, reinstall/kickstart the canonical launch agent
+8. fetch/rewrite the tunnel token, reinstall/start the canonical native user service
 9. require active exact-version connector application, then clear refresh custody
 
 ## Verify, Recover, Guard, And Teardown Sequences
@@ -668,7 +725,7 @@ Verify order:
 
 1. require an existing manager manifest
 2. report whether the local `cloudflared` version supports `--token-file`
-3. check local state and launch-agent surfaces
+3. check local state and native user-service surfaces
 4. check remote tunnel health, organization, tunnel config, and publication resources
 5. optionally run public-endpoint checks
 
@@ -678,7 +735,7 @@ Tunnel recover order:
 2. require local tool availability, including supported `cloudflared`
 3. fetch the current tunnel and current tunnel token
 4. rewrite the local tunnel token file
-5. reinstall and kickstart the canonical launch agent
+5. reinstall and start the canonical native user service
 6. delete all remote tunnel connections
 7. report that every connector on the shared tunnel is forced off the edge
 
@@ -692,12 +749,12 @@ Guard apply order:
 
 Teardown order:
 
-1. persist teardown custody; unload and confirm absence of the canonical launch agent
+1. persist teardown custody; stop the canonical native service and confirm it cannot auto-restart (unloaded on macOS; inactive/disabled on Linux)
 2. refuse active or unobservable remote replicas without globally disconnecting them
 3. delete and positively observe deletion of the exact tunnel while all Access protection remains
 4. retire owned DNS first, then Access and service-token resources, retaining refs across failure
-5. persist remote cleanup completion, then remove the API credential and local artifacts
-6. remove state.json last; preserve takeover backups and the persistent writer-lock file
+5. persist remote cleanup completion, then remove the API credential, exact owned service definition and local artifacts
+6. remove state.json last; preserve takeover backups and the persistent writer-lock file; Linux removes only exact owned token/log artifacts and empty directories, leaving unknown state entries intact
 
 ## Verification Contract
 
@@ -706,8 +763,8 @@ Teardown order:
 - `cloudflared` version supports `--token-file`
 - `state.json` presence
 - tunnel token file presence
-- canonical launch agent presence
-- loaded launch agent state
+- canonical native user-service definition presence
+- running native user-service state
 - remote tunnel health and reachability
 - Zero Trust organization reachability
 - remote tunnel config parity
@@ -765,11 +822,11 @@ entire run on the first exception.
 
 Local fail-closed rules:
 
-- if conflicting local `cloudflared` launchd ownership or `.cloudflared` state is already active,
-  setup stops unless `--takeover` is explicitly supplied and the local conflict is backup-safe
+- if conflicting local `cloudflared` user-service ownership or `.cloudflared` state exists,
+  setup stops; only backup-safe macOS legacy takeover is supported with explicit `--takeover`
 - manager bootstrap fails if Cloudflare token, account, zone, or tunnel identity are ambiguous in
   non-interactive mode
-- setup, tunnel recover, and launch-agent repair paths fail if `cloudflared` is older than
+- setup, tunnel recover, and native-service repair paths fail if `cloudflared` is older than
   `2025.4.0`
 - setup refresh fails if the request tries to change account, zone, or tunnel name without teardown
 
@@ -787,7 +844,7 @@ Remote fail-closed rules:
 
 Recovery posture:
 
-- setup refresh repairs tunnel-token and launch-agent drift, and upgrades the exact owned legacy
+- setup refresh repairs tunnel-token and owned native-service drift, and upgrades the exact owned legacy
   config. It rejects unrelated topology/options and unfinished publication/removal/teardown custody
 - `repair plan` is the read-only operator entrypoint for deciding whether setup refresh, publish,
   guard, or tunnel recovery is the next deliberate terminal action
@@ -828,12 +885,12 @@ this public skill package or a second local-ops skill.
 `plugin.json` is the portable package identity and OpenAI listing. `.claude-plugin/plugin.json`
 contains matching native metadata. Their name, version, and license agree with `pyproject.toml`.
 The host discovers the single `skills/` tree; there is no second generated copy or product-owned
-global skill installer. The package needs a local macOS executor; it does not promise browser-only,
-cloud, or remote-host execution.
+global skill installer. The package needs an executor on the publishing macOS or Linux host;
+it does not promise browser-only execution or execute commands on another host by itself.
 
 The CLI and plugin install independently. `make install-local` installs only the Python CLI with
 `uv tool install --reinstall .`; it does not write a skill directory, run setup, install cloudflared,
-load launchd, or access an account. Plugin installation supplies guidance only. The operator must
+start a native service, or access an account. Plugin installation supplies guidance only. The operator must
 explicitly install the CLI and cloudflared and configure their own account, zone, login method, and
 token before the first publication. No install hook bootstraps services or credentials.
 
@@ -843,7 +900,7 @@ install a package, qualify either host, or contact Cloudflare. The gate also exe
 with the documented hermetic fake environment.
 
 Disabling or removing the plugin stops host discovery only. `uv tool uninstall cloudflare-publish`
-removes the CLI, not the connector, DNS, Access, tunnel, Keychain entries, state, logs, or takeover
+removes the CLI, not the connector, DNS, Access, tunnel, stored credentials, state, logs, or takeover
 backups. For full retirement, first inspect existing publications while the CLI is available, then
 explicitly authorize `teardown --yes`; only afterwards remove the CLI. Teardown preserves backups
 and the persistent manager lock. Keep those with their recovery purpose rather than treating them

@@ -155,7 +155,12 @@ exercise:
 - Access app and policy creation
 - machine, human, and mixed audience behavior
 - tunnel recovery and connector cleanup
-- service lifecycle status, start, stop, restart, log, and launch-agent denial paths
+- native service lifecycle status, start, stop, restart, log, and plist/unit denial paths
+- Linux platform selection, systemd minimum/user-bus/linger admission before remote effects,
+  externally owned dependency installation, and refusal of legacy/system-service takeover
+- distinct per-host tunnel ownership, with no adoption by copied manifests or credentials
+- systemd user-unit serialization/readback, absolute binary/token-file paths, restrictive umask,
+  private append logs, enable/start and disable/stop settlement, and exact owned-unit cleanup
 - service-token rotation
 - same-request resumption and incompatible-mutation refusal through one typed pending transition
 - lost creation responses, exact-operation resource resolution, complete scoped absence proof,
@@ -167,7 +172,7 @@ exercise:
 - persisted withdrawal and exact configuration-version observation across active replicas before
   cleanup, without route resurrection after interruption or global connector disconnection
 - full remote configuration/version parity before application observation, including omitted API
-  versions filled only by the canonical launchd PID-owned loopback listener's native readiness,
+  versions filled only by the canonical native-service PID-owned loopback listener's native readiness,
   tunnel/client identity and applied version; rechecked ownership and identity, API-version
   conflict refusal, and foreign, malformed or unobservable replicas retaining custody
 - teardown stopping local transport and confirming exact tunnel deletion before Access cleanup,
@@ -181,6 +186,8 @@ exercise:
 - Keychain stdin-command encoding, input bounds, secret-safe failures, and exact readback after
   writes; fake bare-`-w` writes must not pretend to consume a noninteractive password prompt
 - Keychain deletion failure preserving unfinished cleanup, and native curlrc isolation
+- Linux private-secret round trips, atomic/readback failures and confirmed deletion, with unsafe
+  UID/modes/symlink/hardlink/nonregular paths refused and credential values absent from diagnostics
 - active/full zone admission rules
 - explicit-tunnel discovery allowlists, redaction, scope, pagination, and unsupported-topology reports
 - deletion-tombstone metadata without obsolete configuration or token fetches, distinct from a down
@@ -195,11 +202,40 @@ exercise:
 - whole-workflow writer exclusion, including service lifecycle, with read-only commands available
 - restricted-permission atomic manifest replacement and preservation after failed staging
 
-Live verification is manual and requires a real macOS workstation plus a real Cloudflare account:
+Live verification is manual and requires a supported publishing host plus a real Cloudflare account:
 
 ```bash
 bin/cloudflare-publish verify --live
 ```
+
+### Linux live acceptance
+
+The gate's Linux fakes and shell fixtures are not a real host, systemd user manager, Cloudflare
+connector, or device. ARM64/DGX is this candidate's deployment target, not live qualification or
+an architecture admission lock. The operator supplies binaries matching the host. Before calling
+Linux delivery accepted, the host's integration owner must check the exact installed candidate and
+operator-approved account, hostname, and credentials, then:
+
+- confirm systemd 240+, working user bus and operator-arranged lingering before remote creation;
+  denied preconditions must leave no new tunnel, DNS, Access resource, or managed service
+- confirm one canonical user unit and distinct tunnel for each independent host/profile, with no
+  Mac relay, copied manager, or system-level takeover
+- exercise native start/status/restart/stop and observed enablement/inactivity; verify persistence
+  across an operator-controlled logout/reboot, then restore the intended running state
+- inspect current-UID directory/file permissions and no-follow secret handling without printing
+  credentials; test an interrupted transition and recover through its existing pending operation
+- verify configuration-application evidence is tied to the current user-service PID and exact owned
+  loopback listener, not merely an enabled unit or healthy origin
+- run `verify --live`, then the application's sensitive HTTPS and WSS negative checks (missing,
+  invalid and revoked session/device credentials), and authenticated checks through the approved
+  hostname. An application-owned pairing/bootstrap surface needs its own bounded acceptance.
+
+For web/iPhone T3 clients, T3 owns pairing and device authentication; do not assume additional Access
+headers/login are available. A `public` origin must fail closed itself. A health response is not
+application authorization, a protocol test is not a real iPhone pairing, and tunnel publication is
+not proof of local inference. The application integration owner checks those actual client/model
+outcomes and retires temporary grants through that application's own controls. No hermetic result
+authorizes a live endpoint, credential grant, public source push, or catalog release.
 
 ## Change Checklist
 
@@ -225,6 +261,8 @@ Before calling a change done:
 - validate `skills/cloudflare-publish/agents/openai.yaml`
 - keep `skills/cloudflare-publish/scripts/inspect-manager.sh` executable and shell-valid
 - keep skill icons structurally valid
+- keep Mac/Linux paths, service ownership, private-store limits, package descriptions and inspector
+  branches synchronized; never label a Linux fake gate as live host acceptance
 - re-run `uv run python devtools/validate_package.py`
 - search for stale or retired terminology when a contract name changes
 
@@ -246,4 +284,6 @@ Before calling a change done:
   rotate a missing completed-publication credential through `publish apply`.
 - Do not turn `repair resolve` into arbitrary adoption, cancellation, or forgetting pending work;
   it resolves only the saved exact effect after intent validation.
-- Do not add launch-agent paths that rely on `cloudflared` older than `2025.4.0`.
+- Do not add native service paths that rely on `cloudflared` older than `2025.4.0`.
+- Do not auto-enable lingering, install Linux dependencies, invoke sudo, create system services,
+  or turn independent host tunnels into replicas of a shared Mac manager.

@@ -40,7 +40,11 @@ When current install/auth/readiness is the question, use `cloudflare-publish --j
 It resolves credentials and contacts Cloudflare account discovery when a token is available.
 Inspect `data.ready` and `data.checks`; diagnostic completion is not readiness.
 
-For local manager facts, inspect the relevant runtime surfaces even if its checkout is unresolved:
+For local manager facts, run `scripts/inspect-manager.sh` from this resolved skill package even if
+the source checkout is unresolved. It chooses the host's canonical paths and reads only safe native
+service metadata, not process arguments/environment or credential files.
+
+Manual macOS surfaces:
 
 ```bash
 ls -la "$HOME/Library/Application Support/cloudflare-publish"
@@ -48,6 +52,21 @@ ls -la "$HOME/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist"
 launchctl list | grep com.cloudflare-publish.cloudflared || true
 cloudflared --version
 ```
+
+Manual Linux surfaces:
+
+```bash
+ls -ld "$HOME/.local/state/cloudflare-publish" \
+  "$HOME/.config/systemd/user/cloudflare-publish.service"
+systemctl --user show cloudflare-publish.service \
+  --property=Id,LoadState,ActiveState,SubState,UnitFileState,MainPID
+loginctl show-user "$(id -u)" --property=Linger --value
+cloudflared --version
+```
+
+Do not dump a unit/plist or use raw service `status`, argv or environment output to diagnose drift:
+an untrusted noncanonical service can contain inline credentials. Linux needs systemd 240+, a
+working user bus and operator-enabled lingering; the product never repairs these through sudo.
 
 ## When the command is unresolved
 
@@ -76,10 +95,23 @@ Exact-tunnel inspection requires the supplied zone to belong to the supplied acc
 adopt manager ownership. Its coverage statement distinguishes inspected routing resources from
 application dependencies or uninspected account topology.
 
-## Canonical runtime surfaces
+## Canonical macOS runtime surfaces
 
 - state manifest: `~/Library/Application Support/cloudflare-publish/state.json`
 - persistent writer lock: `~/Library/Application Support/cloudflare-publish/manager.lock`
 - tunnel token file: `~/Library/Application Support/cloudflare-publish/tunnel-token.txt`
 - launch agent: `~/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist`
 - logs: `~/Library/Logs/cloudflare-publish/`
+
+## Canonical Linux runtime surfaces
+
+- state manifest: `~/.local/state/cloudflare-publish/state.json`
+- persistent writer lock: `~/.local/state/cloudflare-publish/manager.lock`
+- tunnel token file: `~/.local/state/cloudflare-publish/tunnel-token.txt`
+- private secret store: `~/.local/state/cloudflare-publish/credentials/`
+- logs: `~/.local/state/cloudflare-publish/logs/`
+- user unit: `~/.config/systemd/user/cloudflare-publish.service`
+
+These are host-owned surfaces, not a portable manager bundle. Each independent host/profile must
+create a distinct remotely managed tunnel. Installation from a reviewed source and a hermetic gate
+do not establish live Linux acceptance, authorize an endpoint, or configure an origin application.

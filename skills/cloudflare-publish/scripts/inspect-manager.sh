@@ -1,14 +1,28 @@
 #!/usr/bin/env bash
 # Read-only local manager diagnostic. Inputs: PATH, `cloudflared`
-# version, launchd state, manager plist, manager state JSON, and log directory metadata. An optional
+# version, native user-service metadata, manager state JSON, and log directory metadata. An optional
 # standalone PATH Python parses allowlisted file contents; otherwise only metadata is reported.
 # Output: human-readable diagnostic text on stdout/stderr. Side effects: none.
 set -euo pipefail
 
-state_dir="$HOME/Library/Application Support/cloudflare-publish"
+platform="$(uname -s)"
+case "$platform" in
+Darwin)
+  state_dir="$HOME/Library/Application Support/cloudflare-publish"
+  service_file="$HOME/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist"
+  log_dir="$HOME/Library/Logs/cloudflare-publish"
+  ;;
+Linux)
+  state_dir="$HOME/.local/state/cloudflare-publish"
+  service_file="$HOME/.config/systemd/user/cloudflare-publish.service"
+  log_dir="$state_dir/logs"
+  ;;
+*)
+  printf 'unsupported host platform; no manager files or services inspected\n'
+  exit 1
+  ;;
+esac
 state_file="$state_dir/state.json"
-launch_agent="$HOME/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist"
-log_dir="$HOME/Library/Logs/cloudflare-publish"
 printf '== cloudflare-publish CLI ==\n'
 if cli_path="$(command -v cloudflare-publish)"; then
   printf '%s\n' "$cli_path"
@@ -24,26 +38,58 @@ else
 fi
 
 parser=""
-# Apple's system command can request developer-tools installation. Do not execute it, including
-# through a symlink, and never install an interpreter just for this optional diagnostic.
+# Apple's system command can request developer-tools installation. On Darwin do not execute it,
+# including through a symlink. Linux's system Python is fine. Never install a parser for diagnosis.
 if python_path="$(command -v python3)" &&
-  [[ "$python_path" == /* && "$python_path" != /usr/bin/python3 &&
-    ! "$python_path" -ef /usr/bin/python3 ]] &&
+  [[ "$python_path" == /* ]] &&
+  { [[ "$platform" != Darwin ]] ||
+    [[ "$python_path" != /usr/bin/python3 && ! "$python_path" -ef /usr/bin/python3 ]]; } &&
   "$python_path" -I -B -c 'import json, plistlib, sys; sys.exit(sys.version_info < (3, 7))' >/dev/null 2>&1; then
   parser="$python_path"
 fi
 printf '\n== optional file parser ==\n'
 if [[ -n "$parser" ]]; then
-  printf 'available; allowlisted plist and state summaries enabled\n'
+  printf 'available; allowlisted platform file and state summaries enabled\n'
 else
   printf 'unavailable; file contents skipped, metadata-only diagnosis remains available\n'
 fi
 
-printf '\n== launch agent ==\n'
-if [[ -f "$launch_agent" ]]; then
+if [[ "$platform" == Linux ]]; then
+  printf '\n== systemd user unit metadata ==\n'
+  if [[ -e "$service_file" || -L "$service_file" ]]; then
+    ls -ld "$service_file"
+  else
+    printf 'user unit missing: %s\n' "$service_file"
+  fi
+  # Do not use status/cat/ExecStart/Environment or /proc: drift may carry inline secrets.
+  if command -v systemctl >/dev/null 2>&1 &&
+    service_metadata="$(systemctl --user show cloudflare-publish.service \
+      --property=Id,LoadState,ActiveState,SubState,UnitFileState,MainPID 2>/dev/null)"; then
+    printf '%s\n' "$service_metadata" | awk -F= '
+      $1 == "Id" {print "unit_identity_expected=" ($2 == "cloudflare-publish.service"); next}
+      $1 == "MainPID" {if ($2 ~ /^[0-9]+$/) print; else print "MainPID=invalid; withheld"; next}
+      $1 == "LoadState" && $2 ~ /^(stub|loaded|not-found|bad-setting|error|merged|masked)$/ {print; next}
+      $1 == "ActiveState" && $2 ~ /^(active|reloading|inactive|failed|activating|deactivating|maintenance|refreshing)$/ {print; next}
+      $1 == "SubState" && $2 ~ /^(running|dead|failed|exited|auto-restart|auto-restart-queued|start|start-pre|start-post|stop|stop-sigterm|stop-sigkill|stop-post|final-sigterm|final-sigkill|condition|reload|cleaning)$/ {print; next}
+      $1 == "UnitFileState" && $2 ~ /^(enabled|enabled-runtime|linked|linked-runtime|alias|masked|masked-runtime|static|disabled|indirect|generated|transient|bad|not-found)$/ {print; next}
+      $1 ~ /^(LoadState|ActiveState|SubState|UnitFileState)$/ {print $1 "=unknown; contents withheld"}
+    '
+  else
+    printf 'user_manager_metadata=unavailable; check user bus and systemd prerequisites\n'
+  fi
+  if command -v loginctl >/dev/null 2>&1 &&
+    linger="$(loginctl show-user "$(id -u)" --property=Linger --value 2>/dev/null)" &&
+    [[ "$linger" == yes || "$linger" == no ]]; then
+    printf 'user_linger=%s\n' "$linger"
+  else
+    printf 'user_linger=unavailable; operator verification required\n'
+  fi
+else
+  printf '\n== launch agent ==\n'
+  if [[ -f "$service_file" ]]; then
   launchctl list | awk '$3 == "com.cloudflare-publish.cloudflared" {print}' || true
   if [[ -n "$parser" ]]; then
-    "$parser" -I -B - "$launch_agent" "$state_dir/tunnel-token.txt" <<'PY'
+    "$parser" -I -B - "$service_file" "$state_dir/tunnel-token.txt" <<'PY'
 from __future__ import annotations
 
 import plistlib
@@ -87,10 +133,11 @@ else:
 PY
   else
     printf 'launch_agent_parse=skipped; optional standalone Python unavailable; contents withheld\n'
-    ls -ld "$launch_agent"
+    ls -ld "$service_file"
   fi
-else
-  printf 'launch agent missing: %s\n' "$launch_agent"
+  else
+    printf 'launch agent missing: %s\n' "$service_file"
+  fi
 fi
 
 printf '\n== manager state ==\n'

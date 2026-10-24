@@ -6,11 +6,10 @@ from dataclasses import dataclass
 from ipaddress import ip_address
 from uuid import UUID
 
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
 from cloudflare_publish.json_types import JsonObject, load_json_value, require_object
-from cloudflare_publish.launchd import Launchd
-from cloudflare_publish.models import CANONICAL_LABEL
 
 
 @dataclass(frozen=True)
@@ -23,10 +22,10 @@ class LocalConnectorAcknowledgment:
 
 
 class LocalConnectorObserver:
-    """Inspect only the canonical launchd process, never ports guessed or scanned."""
+    """Inspect only the canonical native service process, never guessed ports."""
 
-    def __init__(self, launchd: Launchd, http: CurlHttpClient) -> None:
-        self._launchd: Launchd = launchd
+    def __init__(self, launchd: ConnectorService, http: CurlHttpClient) -> None:
+        self._launchd: ConnectorService = launchd
         self._http: CurlHttpClient = http
 
     def observe(self, *, tunnel_id: str) -> LocalConnectorAcknowledgment:
@@ -61,7 +60,7 @@ class LocalConnectorObserver:
         )
 
     def _managed_pid(self) -> int:
-        service = self._launchd.service(CANONICAL_LABEL)
+        service = self._launchd.service()
         if service is None or service.pid is None or service.pid <= 0:
             raise _unobserved("The canonical connector is not running.")
         return service.pid

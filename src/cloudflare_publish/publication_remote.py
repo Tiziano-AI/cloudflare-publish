@@ -10,7 +10,6 @@ from cloudflare_publish.cloudflare_contract import tunnel_cname
 from cloudflare_publish.config_application import require_configuration_applied
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.json_types import JsonArray, JsonObject
-from cloudflare_publish.keychain import Keychain
 from cloudflare_publish.local_connector_observation import LocalConnectorObserver
 from cloudflare_publish.models import (
     ManagedPublication,
@@ -20,6 +19,7 @@ from cloudflare_publish.models import (
 )
 from cloudflare_publish.publication_contract import service_token_keychain_account
 from cloudflare_publish.render import build_tunnel_configuration, compare_tunnel_configuration
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import now_rfc3339
 from cloudflare_publish.transitions import Mutation, effective_publications
 from cloudflare_publish.verify_support import (
@@ -92,7 +92,7 @@ def publication_candidate(
 
 
 def preflight_publication_credentials(
-    *, keychain: Keychain, manifest: StateManifest, candidate: ManagedPublication
+    *, keychain: SecretStore, manifest: StateManifest, candidate: ManagedPublication
 ) -> None:
     """Keep an initially missing reused credential outside pending mutation custody."""
 
@@ -101,7 +101,7 @@ def preflight_publication_credentials(
     account = candidate.state.service_token_keychain_account
     try:
         if account is None:
-            raise AppError("The reused service token has no Keychain account.")
+            raise AppError("The reused service token has no credential-store reference.")
         _ = keychain.load_secret(account=account)
     except AppError:
         raise AppError(
@@ -129,7 +129,7 @@ def _reuses_service_token(*, manifest: StateManifest, candidate: ManagedPublicat
 def sync_publication(
     *,
     api: CloudflareApi,
-    keychain: Keychain,
+    keychain: SecretStore,
     mutation: Mutation,
     local_observer: LocalConnectorObserver,
 ) -> ManagedPublication:
@@ -329,7 +329,7 @@ def validate_publication_remote_slot(
 def delete_publication_remote(
     *,
     api: CloudflareApi,
-    keychain: Keychain,
+    keychain: SecretStore,
     manifest: StateManifest,
     publication: ManagedPublication,
     preserve: ManagedPublication | None = None,
@@ -419,7 +419,7 @@ def _ensure_access(*, api: CloudflareApi, mutation: Mutation) -> ManagedPublicat
 def _ensure_token(
     *,
     api: CloudflareApi,
-    keychain: Keychain,
+    keychain: SecretStore,
     mutation: Mutation,
 ) -> ManagedPublication:
     candidate = _candidate(mutation)

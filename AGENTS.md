@@ -1,14 +1,14 @@
 # cloudflare-publish
 
-This repository is the source of `cloudflare-publish`, a macOS-only operator CLI that publishes
-HTTP, HTTPS, or machine-authenticated native SSH services already running on this Mac through one
+This repository is the source of `cloudflare-publish`, a macOS and Linux operator CLI that publishes
+HTTP, HTTPS, or machine-authenticated native SSH services already running on that host through one
 Cloudflare Tunnel, and of the
 `cloudflare-publish` agent skill that teaches its operation.
 
 ## The product and where it is described
 
-One manager per macOS user profile owns one Cloudflare account, one active full (not partial or
-CNAME) DNS zone, one shared remotely managed tunnel, one launchd `cloudflared` connector and many
+One manager per host/user profile owns one Cloudflare account, one active full (not partial or
+CNAME) DNS zone, one distinct remotely managed tunnel, one native user `cloudflared` connector and many
 exact-hostname HTTP(S) or SSH publications. HTTP supports the `human`, `machine`, `mixed`, and
 origin-authenticated `public` audiences; SSH supports only `machine`, with a mandatory independently
 trusted Ed25519 host-key pin. Protected audiences use Cloudflare Access; `public` has no Access at
@@ -16,7 +16,8 @@ all. Wildcards, path routing, protocols other than HTTP(S) and SSH,
 private-network routes, IdP setup and multi-account or multi-zone management are outside the
 contract, and adding any of them starts with a change to `ARCH.md`. Setup stays fail-closed on any
 zone that is not `active` and `full`, because the product writes the zone's DNS records directly.
-The connector runs with `--token-file`, so every launch-agent path keeps requiring `cloudflared`
+Independent hosts never share a tunnel identity by copying credentials or state. The connector runs
+with `--token-file`, so every service path keeps requiring `cloudflared`
 `2025.4.0` or later.
 
 - `ARCH.md` owns the product and CLI contract: command ownership, local paths, typed state,
@@ -32,10 +33,20 @@ The connector runs with `--token-file`, so every launch-agent path keeps requiri
   for unfinished work that needs one, and remove it when resolved; do not retain completed-work
   journals or empty handoff placeholders.
 
-Live manager state lives outside the repository, in
+macOS manager state lives outside the repository, in
 `~/Library/Application Support/cloudflare-publish/` (`state.json`, `tunnel-token.txt`, takeover
 `backups/`, persistent `manager.lock`), `~/Library/Logs/cloudflare-publish/` and the launch agent
 `com.cloudflare-publish.cloudflared`.
+
+Linux uses `~/.local/state/cloudflare-publish/` for state, persistent lock, token,
+`credentials/`, and `logs/`, plus `~/.config/systemd/user/cloudflare-publish.service`.
+It requires systemd 240+, a working user bus, and operator-arranged `Linger=yes`. Never invoke sudo,
+enable lingering, auto-install Linux dependencies, adopt legacy ownership, or create system services.
+The Linux secret store uses current-UID mode-0700 directories and mode-0600 regular single-link files,
+no-follow opens, atomic replacement and exact readback. It is not encryption at rest or protection
+from root/the same UID. `*_keychain_account` manifest fields are opaque platform-store references.
+Linux admission is OS/systemd based; ARM64/DGX is the candidate's deployment target, not live
+hardware qualification or an architecture restriction. The operator supplies matching binaries.
 
 ## Source layout
 
@@ -46,9 +57,9 @@ Live manager state lives outside the repository, in
   `rm`, `guard` and `tunnel recover` plan forms and `guard status`. Judge a command's effect by its
   exact subcommand and workflow.
 - `cli_output.py` owns the JSON envelope and its output classes.
-- `state.py` owns the typed local manifest. `cloudflare_api.py`, `cloudflared.py`, `launchd.py`,
-  `keychain.py` and `http.py` are the adapters to external systems, one per system; keep vendor and
-  process details behind them.
+- `state.py` owns the typed local manifest. Cloudflare, HTTP, native user-service, and secret-store
+  adapters keep vendor/process details behind their contracts; macOS uses launchd/Keychain, while
+  Linux uses systemd user services/private files. Keep OS selection out of shared workflows.
 - API-token resolution is in `cli_auth.py` and `workflow_support.py`, private-dotenv ingress in
   `local_secrets.py`, and the setup environment fallbacks in `cli_write_commands.py`, resolved
   through `cli_shared.py`.
@@ -77,14 +88,18 @@ Live manager state lives outside the repository, in
   typecheck invokes the repository-local npm binary, with no download, global fallback or bootstrap.
   A repo or skill change is incomplete until it passes.
 - The test suite is hermetic: it runs fake `curl`, `cloudflared`, `ssh`, `launchctl`, `security` and
-  `brew` binaries against a fake Cloudflare API in a temporary `HOME`. A green gate therefore says
+  `brew` and Linux user-service tools against a fake Cloudflare API in a temporary `HOME`.
+  A green gate therefore says
   nothing about live Cloudflare behavior, the installed command or native plugin activation. When
   either is part of the task, check the host's selected plugin and the installed CLI separately.
   The read-only commands
   (`doctor`, `verify`, `repair plan`) make no Cloudflare or managed-state
   writes, so neither they nor the gate show that a live write works; report which of them actually
-  ran. Live verification is manual, on a real Mac and account:
+  ran. Live verification is manual on the publishing host and account:
   `bin/cloudflare-publish verify --live`.
+  Linux additionally needs real user-service ownership/readback, logout/reboot persistence,
+  secret-permission, connector-listener evidence, and intended-client HTTPS/WSS negative and
+  authenticated acceptance. Hermetic tests do not establish any of these live outcomes.
 - A contract change starts in `ARCH.md` and stays synchronized, in the same change, across
   `README.md`, `CONTRIBUTING.md`, runtime code, tests and the skill package. A CLI contract change
   updates `ARCH.md`, `README.md` and the skill package before runtime code. `CONTRIBUTING.md`'s
@@ -144,8 +159,8 @@ Overlay Contract owns this boundary.
 
 - `cloudflare-publish --json doctor` reports that diagnostics completed, not that the manager is
   ready: exit zero and `ok: true` can accompany `data.ready: false`, so read `data.ready` and
-  `data.checks`. It resolves the API token (environment, private dotenv or Keychain) and, when one
-  is found, calls Cloudflare's account API, so it is not an offline source probe.
+  `data.checks`. It resolves the API token (environment, private dotenv or platform secret store)
+  and, when one is found, calls Cloudflare's account API, so it is not an offline source probe.
 - `verify` is the readiness command and exits nonzero on failing checks; with `--json` the error
   envelope keeps `data.checks`, `data.failures`, and `data.groups`. Its typed groups are `manager`,
   `routing`, `origin`, `access`, and `public_probe`, and publication-specific checks carry name and
@@ -172,11 +187,12 @@ Overlay Contract owns this boundary.
   `repair retire-token ... --yes` and `teardown --yes`. Explicit unknown-rotation recovery is
   `token rotate NAME --recover --yes`; it reissues the same owned token, not a new resource.
 - Treat `tunnel recover apply --yes` as shared-tunnel incident recovery: it disconnects every
-  connector on the managed tunnel, including replicas this Mac does not manage.
+  connector on the managed tunnel, including unmanaged replicas. Independent hosts must use distinct tunnels.
 - `service start`, `service stop` and `service restart` change nothing in Cloudflare, but they load,
-  unload or restart the one launchd connector through which this Mac serves every publication:
-  `stop` runs `launchctl bootout`, and this Mac stops serving all of them. Run them only when the
-  person asks; `service status` and `service logs` only read.
+  unload or restart the native user connector through which this host serves every publication:
+  macOS stop uses `launchctl bootout`; Linux stop disables the unit and confirms inactivity.
+  This host stops serving all of them. Run them only when the person asks; `service status` and
+  `service logs` only read.
 - `--audience public` is only for an origin with its own fail-closed request authentication. It
   deliberately owns no Access application, policy or service token; never use it to make an
   otherwise unauthenticated service public.
@@ -194,15 +210,18 @@ Overlay Contract owns this boundary.
   every other command stay secret-free; keep it that way.
 - Keep Cloudflare API tokens and Access service-token secrets out of chat, reusable docs, process
   arguments and tracked dotenv files, and never ask the person to paste one into chat. Persistent
-  credentials live in macOS Keychain. Bootstrap input comes from the interactive setup prompt, a
-  short-lived `CLOUDFLARE_API_TOKEN`, or a private dotenv named by an absolute
+  credentials live in the platform store described above. Bootstrap input comes from the
+  interactive setup prompt, a short-lived `CLOUDFLARE_API_TOKEN`, or a private dotenv named by an absolute
   `CLOUDFLARE_PUBLISH_DOTENV` path outside this repository (a regular file with mode `0600`); the
   CLI reads no other dotenv. `--api-token` exists for local emergencies and tests.
 
 ## Recovery
 
 - Start uncertain repair work with `cloudflare-publish repair plan`, which changes no managed state.
-- `setup` refresh repairs tunnel-token-file and launch-agent drift. It accepts only the exact
+- Linux unit retirement retains `.cloudflare-publish.service.retiring` beside the unit until native
+  reload and absence are confirmed. Resume `teardown --yes`; never delete custody or run setup
+  over it. Exact local cleanup preserves unknown entries and the persistent writer lock.
+- `setup` refresh repairs tunnel-token-file and native user-service drift. It accepts only the exact
   owned guarded configuration or its exact legacy guard-stripped form; foreign config drift is
   not overwritten. It cannot change the manager's account, zone or tunnel identity.
 - Pending intent in `state.json` owns unfinished mutations. Resume only the exact original
@@ -214,9 +233,9 @@ Overlay Contract owns this boundary.
   secret remains pending and requires exact `repair retire-token` before publication resumes.
 - After a dashboard tunnel-token rotation or a shared-tunnel incident, run `tunnel recover plan`
   before the confirmed apply. Connector `service restart` is not a substitute: `service` commands
-  own only the local launchd process and its logs and reconcile nothing in Cloudflare. The product
-  never rotates the remote tunnel token itself; that happens in the dashboard first.
-- Preserve takeover backups under the product's Application Support tree. Takeover touches only the
-  legacy `com.cloudflare.cloudflared` launch agent, `~/.cloudflared/config.yml` and
+  own only the local native user-service process and its logs and reconcile nothing in Cloudflare.
+  The product never rotates the remote tunnel token itself; that happens in the dashboard first.
+- On macOS, preserve takeover backups under the product's Application Support tree. Takeover touches
+  only the legacy `com.cloudflare.cloudflared` launch agent, `~/.cloudflared/config.yml` and
   `~/.cloudflared/cert.pem`; keep it scoped to those. Do not manually adopt same-name tunnels, DNS
   records or Access applications that local state does not own.

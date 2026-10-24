@@ -1,7 +1,7 @@
 {
   "name": "cloudflare-publish",
   "version": "0.3.2",
-  "description": "Publish local web apps, APIs, or machine-only SSH from your Mac through Cloudflare Tunnel.",
+  "description": "Publish local web apps, APIs, or machine-only SSH from macOS or Linux through Cloudflare Tunnel.",
   "author": {
     "name": "Tiziano AI",
     "url": "https://github.com/Tiziano-AI"
@@ -9,6 +9,6 @@
   "homepage": "https://github.com/Tiziano-AI/cloudflare-publish",
   "repository": "https://github.com/Tiziano-AI/cloudflare-publish",
   "license": "MIT",
-  "keywords": ["cloudflare", "tunnel", "localhost", "macos", "access"],
+  "keywords": ["cloudflare", "tunnel", "localhost", "macos", "linux", "access"],
   "icon": "./skills/cloudflare-publish/assets/icon-large.png"
 }

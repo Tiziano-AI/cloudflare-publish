@@ -2,12 +2,12 @@
 
 # Cloudflare Publish
 
-Give a service running on your Mac a stable hostname through your own Cloudflare account.
+Give a service running on your Mac or Linux host a stable hostname through your own Cloudflare account.
 Share a web app behind a login, connect a private API to machine clients, receive authenticated
 callbacks, or reach an already configured SSH server without inbound port forwarding.
 
 `cloudflare-publish` manages the Tunnel, DNS records, and access controls. Your application,
-its data, and its start/stop policy stay on your Mac. This is a macOS CLI with an optional
+its data, and its start/stop policy stay on that host. This is a macOS and Linux CLI with an optional
 agent plugin for Codex and Claude Code, not a hosting service.
 
 [Install](#install-the-cli-and-plugin) · [First publication](#first-publication) ·
@@ -29,15 +29,19 @@ Each publication maps one local origin to one exact hostname. Choose how clients
 client, first check whether it supports Access login or service-token headers. For SSH, the server
 and user authorization must already exist; this tool does not enable Remote Login or install keys.
 
-The Mac must remain awake, connected, and running the origin. A reachable hostname is only the
+The host must remain awake, connected, and running the origin. A reachable hostname is only the
 transport result: verify the real browser, API, callback, or SSH workflow as well.
 
 ## Product Boundary
 
-One manager per macOS user profile owns one Cloudflare account, one active full DNS zone,
-one shared remotely managed tunnel, and many HTTP(S) or machine-only SSH publications.
+One manager per host/user profile owns one Cloudflare account, one active full DNS zone,
+one distinct remotely managed tunnel, and many HTTP(S) or machine-only SSH publications.
 Each publication has zero or one Access application and zero or one service token, according to
 its audience.
+
+Independent hosts are not replicas: each creates its own tunnel and native user service. Do not
+copy another host's manifest, tunnel token, or credentials. Two independent application backends
+are reached directly through their own HTTPS/WSS hostnames, not through a Mac relay.
 
 It does not deploy code to Workers or Pages, manage wildcard or path-based routing, publish
 other protocols, or create VPN/private-network access. Cloudflare login-method setup, dashboard
@@ -46,9 +50,11 @@ its scope. See [ARCH.md](ARCH.md) for the full ownership and security contract.
 
 ## Requirements
 
-- macOS
+- macOS, or Linux with systemd 240 or later, a working systemd user manager/bus, and
+  `Linger=yes` for unattended operation across logout/reboot
 - `uv` and Python 3.12 or later (`uv` can manage the Python interpreter)
 - `cloudflared` `2025.4.0` or later
+- `curl` and `lsof` on `PATH`; `lsof` supplies exact connector-owned listener evidence
 - native OpenSSH client for SSH verification; an independently configured local SSH server and its
   trusted Ed25519 public host key for SSH publication
 - a Cloudflare account with a Zero Trust organization
@@ -66,7 +72,7 @@ Human-access publications assume the Zero Trust organization already has a usabl
 ## Install The CLI And Plugin
 
 The CLI is standalone; the optional agent plugin teaches Codex and Claude Code how to operate it.
-They install separately. The plugin requires a local macOS executor with shell access, not a
+They install separately. The plugin requires shell access on the supported publishing host, not a
 browser-only chat or a cloud worker. It includes no Cloudflare account or hosted service.
 
 Clone the public source into a directory you choose, then install the CLI onto `PATH`:
@@ -81,6 +87,10 @@ If you already have a source checkout or an installed plugin package containing 
 run only the final command from that selected root. `uv` creates an isolated CLI environment.
 CLI installation does not install cloudflared, start a connector, read credentials, or configure
 Cloudflare.
+
+On Linux, the operator installs dependencies through their supported upstream/distribution route;
+the product does not install packages or system services. See [Linux bootstrap](#linux-bootstrap)
+before running setup on a headless host.
 
 Check the selected CLI from outside the source directory, without credentials or network calls:
 
@@ -140,9 +150,10 @@ cloudflare-publish setup --zone example.com
 ```
 
 Enter the API token in the local terminal prompt, never in an agent chat. Setup selects the
-account, creates the remotely managed tunnel, stores credentials in Keychain, and starts the
-local launchd connector. If conflicting cloudflared configuration exists, stop and review the
-[takeover scope](#setup) instead of deleting it. If the manager already exists, setup refreshes
+account, creates that host/profile's remotely managed tunnel, stores credentials in the host's
+private store (macOS Keychain or Linux private files), and starts the native user connector.
+If conflicting cloudflared configuration exists, stop and review the
+[platform conflict policy](#setup) instead of deleting it. If the manager already exists, setup refreshes
 that manager rather than creating another one.
 
 ### 2. Review the publication
@@ -183,7 +194,7 @@ plugin through the host. Neither action changes account identity or reconciles m
 Check `cloudflare-publish --version` and the host's selected plugin version independently.
 
 Removing or disabling the plugin removes its guidance only. The separately installed CLI,
-cloudflared connector, launch agent, DNS, tunnel, Access policies, tokens, Keychain entries, manager
+cloudflared connector, native user service, DNS, tunnel, Access policies, tokens, private credentials, manager
 state, logs, and takeover backups remain. To remove only the CLI, run:
 
 ```bash
@@ -250,7 +261,7 @@ The CLI resolves the API token in this order:
 1. explicit `--api-token` for local emergency or tests
 2. process environment `CLOUDFLARE_API_TOKEN`
 3. private dotenv file pointed at by `CLOUDFLARE_PUBLISH_DOTENV`, key `CLOUDFLARE_API_TOKEN`
-4. macOS Keychain, after a manager state file exists
+4. the platform secret store, after a manager state file exists (macOS Keychain; Linux private files)
 
 For initial interactive setup, omit `--api-token` and enter the token at the terminal prompt. For
 non-interactive setup, either export `CLOUDFLARE_API_TOKEN` for one command or set
@@ -352,7 +363,7 @@ manifest integrity, not dashboard edits or Cloudflare transactions.
 
 An unfinished mutation remains in one `pending` transition in `state.json`: operation identity,
 normalized request, phase, effective route, owned candidate resources, and any unknown external
-effect. It contains Keychain references, not secrets, and disappears when the operation completes.
+effect. It contains opaque secret-store references, not secrets, and disappears when the operation completes.
 A compatible repeat of the original confirmed command resumes the same work. An incompatible
 mutation fails with `transition_pending`; reads and plans remain available. Do not delete or edit
 `pending` to make the next command run, and do not substitute setup refresh for an interrupted
@@ -398,7 +409,7 @@ old configuration retains its old origin and matching old protection. Withdrawal
 routing changes, and cleanup waits for the exact target configuration version on every observed
 active connector, after the full remote configuration and its version match the intended state.
 If Cloudflare's API omits the local connector's version, the CLI can obtain it from that
-connector's native loopback diagnostics: it checks the launchd process and listener ownership,
+connector's native loopback diagnostics: it checks the native user-service process and listener ownership,
 the exact tunnel and connector identities, and the applied version. It does not scan ports,
 traverse a proxy or read process arguments, environment, tokens or logs. This fills only an
 omitted version for that exact connector, never overrides an API-reported mismatch, and proves
@@ -412,13 +423,14 @@ before removing Access protection.
 
 ## Setup
 
-Interactive bootstrap:
+Interactive bootstrap on either supported platform:
 
 ```bash
-cloudflare-publish setup --install-deps
+cloudflare-publish setup
 ```
 
-`--install-deps` uses Homebrew to install `cloudflared`, so Homebrew must already be on `PATH`.
+On macOS only, explicit `--install-deps` uses Homebrew to install `cloudflared`; Homebrew must
+already be on `PATH`. Linux rejects this option and requires externally installed dependencies.
 
 Non-interactive bootstrap:
 
@@ -437,7 +449,7 @@ cloudflare-publish setup \
   --tunnel-name my-mac
 ```
 
-Takeover bootstrap when conflicting local `cloudflared` ownership already exists:
+macOS-only takeover when conflicting local `cloudflared` ownership already exists:
 
 ```bash
 cloudflare-publish setup --takeover --yes \
@@ -445,11 +457,15 @@ cloudflare-publish setup --takeover --yes \
   --zone example.com
 ```
 
+Linux never adopts legacy or system-wide cloudflared ownership, even with `--takeover`.
+An operator must resolve reported conflicting services/files separately. The CLI does not invoke
+sudo, create a system service, or change user lingering.
+
 `setup` is also the refresh path for an existing manager. Rerunning it:
 
 - refreshes the tunnel runtime token
 - validates the complete remote tunnel configuration before applying owned state
-- reinstalls the canonical launch agent
+- reinstalls the canonical native user service
 
 Refresh refuses foreign routes, global options, unsupported fields, or other configuration drift
 rather than overwriting them. It can upgrade the exact owned pre-validator configuration to native
@@ -467,6 +483,7 @@ cloudflare-publish setup --refresh-only
 `setup` fails closed when:
 
 - `--refresh-only` is used before local manager state exists
+- the platform, systemd version, user bus, lingering, or external dependencies are unsupported
 - conflicting local `cloudflared` state exists and `--takeover` is missing
 - `cloudflared` is older than `2025.4.0`
 - the token cannot see the chosen account or zone
@@ -480,13 +497,75 @@ The selected tunnel name is a logical manager name. The created remote name incl
 operation ID; do not assume a same logical name is the exact remote object or adopt it manually.
 An uncertain creation is resolved through `repair plan` and exact-resource resolution.
 
+### Linux bootstrap
+
+Run as the intended non-root publishing user on each host, never by copying the Mac manager.
+The operator supplies Python 3.12+, `uv`, official `cloudflared` 2025.4.0+, `curl`, and `lsof`.
+Confirm the native user manager before authorizing any Cloudflare creation:
+
+```bash
+uname -m
+systemctl --version
+systemctl --user show --property=Version --value
+loginctl show-user "$(id -u)" --property=Linger --value
+command -v uv curl cloudflared lsof
+cloudflared --version
+```
+
+Expect systemd 240+, a usable user bus, and `yes` for lingering. Record the host architecture and
+use the matching cloudflared binary; the Linux deployment target for this candidate is ARM64/DGX,
+not a hardware lock or a claim of live qualification. If lingering is disabled, the host
+administrator arranges `loginctl enable-linger USERNAME` for the intended
+user under host policy; the product does not elevate privileges or enable it. A container without
+a working user manager is not a supported substitute. Setup diagnoses these prerequisites before
+creating remote resources.
+
+The host initiates outbound connections; no inbound port, public origin IP, or NAT/PAT forwarding
+is required. Arrange DNS through the host's approved resolver and outbound UDP/7844 (QUIC) plus
+TCP/7844 (HTTP/2) to Cloudflare's documented tunnel destinations. Allowing both transports is the
+robust configuration; HTTP/2 can work when UDP is blocked, but HTTPS/443 does not replace blocked
+7844. Follow the current [Cloudflare firewall destination and SNI list](https://developers.cloudflare.com/tunnel/configuration/#firewall-rules)
+rather than freezing IPs here. This manager also needs HTTPS/443 to `api.cloudflare.com`; package
+downloads need HTTPS to the selected official repository or release source. Those management and
+download connections are distinct from tunnel transport.
+
+Cloudflare supplies Linux ARM64 binaries, DEB and RPM packages. On Debian/Ubuntu-derived hosts,
+check the actual package architecture and use the current official instructions, including their
+distro-neutral `any` APT repository and signing key; do not invent an NVIDIA-specific distribution
+codename. See [Cloudflare downloads](https://developers.cloudflare.com/tunnel/downloads/) and the
+[official package repository](https://pkg.cloudflare.com/index.html). Available ARM64 packages do
+not establish compatibility on either DGX.
+
+Install from the exact reviewed source or native plugin package root with
+`uv tool install --reinstall .`, then check the selected CLI outside that root. Before setup, obtain:
+
+- the approved Cloudflare account and active full zone, scoped API-token grant, and local terminal
+  or strict private-dotenv secret ingress; never send a token in chat
+- a distinct logical tunnel name for this host/profile, not another host's tunnel ID or runtime token
+- the exact approved hostname, local origin URL, audience, and application-owned verification path
+  and expected status; for SSH, an independently trusted Ed25519 host-key pin
+
+Then use the common setup, plan, apply, and verify commands. `setup --tunnel-name host-a-profile`
+is an illustrative unique name, not a proposed public hostname. No endpoint or credential grant is
+implied by installing the CLI. Linux owns its user unit and private state only; it never starts the
+origin application. The application's owner must ensure that origin also survives logout/reboot.
+
+For a T3-style web/iPhone client, the application owns pairing and device/session authentication.
+Do not assume the client can send Access service-token headers or complete browser Access login.
+If it cannot, use `public` only after Internet exposure is approved and the application proves
+fail-closed HTTPS and WSS authorization. Use the actual sensitive path and denial status from the
+installed application, not an invented API path or a green health check. Each backend publishes
+directly from its own host; inference stays there. See the
+[native-client recipe](skills/cloudflare-publish/references/operator-recipes.md#native-clients-with-origin-owned-authentication).
+
 ## Connector Service Lifecycle
 
-The `service` command group manages only the local `cloudflared` launchd connector. It does not
-change Cloudflare remote resources or publication state. `service start` and `service restart`
-validate the existing launch-agent plist before invoking launchd: the plist must use the canonical
-label, point at the manager token file, and encode a `cloudflared` binary that supports
-`--token-file`.
+The `service` command group manages only the local `cloudflared` user connector: launchd on macOS,
+systemd `--user` on Linux. It does not change Cloudflare remote resources or publication state.
+`service start` and `service restart` validate the canonical plist/unit before invoking the native
+manager: it must identify the owned service, manager token file, and absolute `cloudflared` binary
+with the supported `--token-file` command shape. Linux units use a restrictive umask and private
+append-only stdout/stderr destinations; they do not contain credential values.
 
 Show local lifecycle state:
 
@@ -494,7 +573,7 @@ Show local lifecycle state:
 cloudflare-publish service status
 ```
 
-Start an existing launch agent:
+Start an existing canonical user service:
 
 ```bash
 cloudflare-publish service start
@@ -519,7 +598,14 @@ cloudflare-publish service logs
 cloudflare-publish service logs --lines 200
 ```
 
-Use `setup` when the launch-agent plist or tunnel token file is missing or stale. Use `verify` when
+On Linux, start enables the owned unit; stop disables it and confirms inactivity, so it does not
+restart at the next login/reboot. Teardown retains the exact owned definition as
+`~/.config/systemd/user/.cloudflare-publish.service.retiring` until reload and native absence are
+confirmed. If interrupted, resume `teardown --yes`; do not delete the custody file or run setup
+over it. Setup/start refuse incomplete retirement. On macOS, stop retains its existing
+`launchctl bootout` behavior.
+
+Use `setup` when the native service file or tunnel token file is missing or stale. Use `verify` when
 the question is whether local state and Cloudflare remote state still match.
 
 ## Publish
@@ -657,7 +743,7 @@ Cloudflare carries the outer transport and remains an account and availability d
 SSH with strict host-key checking keeps the SSH contents encrypted end-to-end between client and
 server. This is not a third-party-free connection, VPN, or general UDP tunnel. WebSocket transport
 can disconnect: supervise long-lived SSH separately, and keep remote work independent of its
-connection. A stable hostname cannot reach a Mac that is asleep, offline, or not serving SSH.
+connection. A stable hostname cannot reach a host that is asleep, offline, or not serving SSH.
 
 ## Inspect And Verify
 
@@ -699,7 +785,7 @@ cloudflare-publish verify grafana --live
 - local `cloudflared` version supports `--token-file`
 - local state file presence
 - tunnel token file presence
-- canonical launch agent presence and load state
+- canonical native user-service presence and load state
 - remote tunnel health and reachability
 - Zero Trust organization reachability
 - parity of the complete supported tunnel configuration, including per-route Access AUD and
@@ -756,7 +842,7 @@ cloudflare-publish tunnel recover apply --yes
 
 - fetches the current remote tunnel token
 - rewrites the local token file
-- reinstalls and restarts the canonical launch agent
+- reinstalls and restarts the canonical native user service
 - deletes all active connectors for the shared tunnel through the Cloudflare API
 
 This is intentionally high impact. It disconnects every connector on the shared tunnel, including
@@ -836,13 +922,16 @@ boundary, not proof that application sessions or workloads have ended.
 
 Takeover backups and `manager.lock` survive; the lock file must not be unlinked while the operation
 holds it and remains safe to reuse for a later setup.
+Linux cleanup removes only exact owned token/log files and empty credential/log directories;
+unknown state entries remain. Failed unit retirement also retains the definition custody file
+described under Service Control, even after the API credential has been deleted.
 
 `setup`, `setup --refresh-only`, `publish apply`, `token rotate`, `guard apply`, `rm apply`,
 `teardown --yes`, `setup --takeover`, and `tunnel recover apply` are all explicit-impact commands.
 
 ## Local Ownership
 
-The manager owns these local paths:
+On macOS, the manager owns these local paths:
 
 - `~/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist`
 - `~/Library/Application Support/cloudflare-publish/state.json`
@@ -852,21 +941,41 @@ The manager owns these local paths:
 - `~/Library/Logs/cloudflare-publish/cloudflared.out.log`
 - `~/Library/Logs/cloudflare-publish/cloudflared.err.log`
 
-It does not treat `~/.cloudflared/config.yml` or `~/.cloudflared/cert.pem` as canonical state.
-Takeover backs up and removes only those two files and the conflicting legacy launch agent;
+On Linux, it owns:
+
+- `~/.local/state/cloudflare-publish/state.json`
+- `~/.local/state/cloudflare-publish/manager.lock`
+- `~/.local/state/cloudflare-publish/tunnel-token.txt`
+- `~/.local/state/cloudflare-publish/credentials/`
+- `~/.local/state/cloudflare-publish/logs/cloudflared.out.log`
+- `~/.local/state/cloudflare-publish/logs/cloudflared.err.log`
+- `~/.config/systemd/user/cloudflare-publish.service`
+
+These are canonical Linux paths, not relocatable by copying another host's state. Neither platform
+treats `~/.cloudflared/config.yml` or `~/.cloudflared/cert.pem` as canonical state.
+macOS takeover backs up and removes only those two files and the conflicting legacy launch agent;
 it leaves unrelated files in `~/.cloudflared/` alone.
 
 ## Secret Handling
 
-- Cloudflare API token: macOS Keychain
-- Access service-token secrets: macOS Keychain
-- shared tunnel runtime token: local file with strict permissions for launchd use
+- Cloudflare API token and Access service-token secrets: macOS Keychain, or Linux private files
+- shared tunnel runtime token: local file with strict permissions for native user-service use
 
-Keychain writes send a bounded `security -q -i` command over stdin, using UTF-8 hex password input
+On macOS, Keychain writes send a bounded `security -q -i` command over stdin, using UTF-8 hex password input
 and exact readback verification instead of a noninteractive password prompt. The adapter accepts
 nonempty printable ASCII credentials, not arbitrary binary passwords. Secret material stays out of
 process arguments and write diagnostics. Deletion errors retain cleanup custody rather than
-pretending an entry is absent. Curl ignores user curlrc configuration and writes headers and JSON bodies into
+pretending an entry is absent.
+
+On Linux, one file per opaque account reference lives under the current UID's mode-`0700`
+`credentials/` directory. Each must be an owned mode-`0600` regular single-link file, opened without
+following symlinks. Private atomic replacement and exact readback confirm writes; unsafe existing
+paths or unconfirmed deletion fail closed without printing values. Manifest fields named
+`*_keychain_account` remain opaque references; they do not select a Mac store on Linux. This is
+POSIX access control, **not encryption at rest**, a hardware vault, or protection from root or
+another process with the same UID. A desktop keyring session is not required.
+
+Curl ignores user curlrc configuration and writes headers and JSON bodies into
 strict-permission temporary files, so API bearer tokens and Access service-token secrets are not
 exposed through curl argv.
 
@@ -914,7 +1023,7 @@ Cloudflare operator task; this CLI has no raw vendor API escape hatch.
 
 If verification reports foreign tunnel-config drift, inspect the reported fields and remote owner.
 Ordinary writes, including setup refresh, refuse to overwrite it. If the problem is only a missing
-or stale local launch agent or tunnel-token file and no mutation is pending, use `setup` for the
+or stale local native service file or tunnel-token file and no mutation is pending, use `setup` for the
 same manager.
 
 If a completed machine publication loses its local service-token secret, run
@@ -929,6 +1038,6 @@ cloudflare-publish tunnel recover plan
 cloudflare-publish tunnel recover apply --yes
 ```
 
-If `setup --takeover` has already removed the old launch agent and legacy config, do not keep
+On macOS, if `setup --takeover` has already removed the old launch agent and legacy config, do not keep
 rerunning takeover blindly. Once the old local conflict is gone, use plain `setup` as the refresh
 path.

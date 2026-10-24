@@ -251,6 +251,12 @@ if parsed.netloc == "api.cloudflare.com":
     if "/cfd_tunnel/" in path and path.endswith("/connections") and method == "GET":
         tunnel_id = path.split("/cfd_tunnel/")[1].split("/")[0]
         clients = cloudflare.setdefault("tunnel_connections", {}).get(tunnel_id, [])
+        if state.get("omit_local_config_version") is True:
+            clients = [
+                {key: value for key, value in client.items() if key != "config_version"}
+                if client["id"] == state.get("native_connector_id") else client
+                for client in clients
+            ]
         write_response(200, paginated_result(clients, query))
 
     if "/cfd_tunnel/" in path and path.endswith("/configurations"):
@@ -278,7 +284,7 @@ if parsed.netloc == "api.cloudflare.com":
             cloudflare["tunnel_configurations"][tunnel_id] = {**payload, "version": version}
             if cloudflare.get("hold_local_config") is not True:
                 for client in cloudflare.setdefault("tunnel_connections", {}).get(tunnel_id, []):
-                    if client["id"] == "local-client":
+                    if client["id"] in {"local-client", state.get("native_connector_id")}:
                         client["config_version"] = version
             save()
             write_response(

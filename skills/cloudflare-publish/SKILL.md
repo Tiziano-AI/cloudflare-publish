@@ -1,12 +1,12 @@
 ---
 name: cloudflare-publish
-description: "Publish, update, verify, recover, or remove local HTTP(S) or machine-authenticated native SSH on this Mac through the managed exact-hostname Cloudflare Tunnel manager. SSH requires a pinned Ed25519 host key. Also use to explain this product. Not for Workers, Pages, generic Cloudflare architecture, wildcard/path routing, VPN/private-network connectors, DNS-only administration, or non-local publication."
+description: "Publish, verify, recover, or remove local HTTP(S) or machine-only SSH on macOS or Linux through the exact-hostname Cloudflare Tunnel manager. SSH requires a pinned Ed25519 host key. Also use to explain this product. Not for Workers, Pages, generic Cloudflare architecture, wildcard/path routing, VPN/private networks, DNS-only administration, or services on a different host."
 ---
 # Cloudflare Publish
 
 This manager maps a running local HTTP(S) or machine-authenticated SSH service to one exact hostname
-in the operator's own Cloudflare account and active full DNS zone. One remotely managed tunnel carries
-all managed publications. Protected audiences use Cloudflare Access; `public` omits Access only
+in the operator's own Cloudflare account and active full DNS zone. One distinct remotely managed tunnel
+per host/user profile carries that host's publications. Protected audiences use Cloudflare Access; `public` omits Access only
 when the origin already enforces fail-closed request authentication.
 
 This plugin supplies guidance, not an account or a running service. It installs no CLI, credentials,
@@ -17,6 +17,14 @@ Disabling or removing the plugin leaves the CLI, connector, publications, and cr
 For interrupted writes, start with `repair plan`. Never erase pending state or blindly repeat a
 resource creation whose result is unknown; follow [Interrupted writes](#interrupted-writes).
 
+macOS uses launchd/Keychain. Linux uses systemd 240+ user services and private POSIX credential
+files, not a desktop keyring or system daemon. A working user bus and operator-arranged `Linger=yes`
+are required before setup; never auto-enable lingering, invoke sudo, install Linux dependencies,
+or take over legacy/system services. Each independent host creates its own tunnel: do not copy Mac
+state/tokens or turn independent backends into replicas. Read the Linux bootstrap recipe before
+headless setup. New public hostnames, token grants, host administration, and source publication are
+separate decisions; plugin installation grants none of them.
+
 ## Use when
 
 - publishing, updating, verifying, or removing a local web app, API, authenticated callback,
@@ -25,7 +33,7 @@ resource creation whose result is unknown; follow [Interrupted writes](#interrup
 - explaining the product or changing its source, skill, or terminal-first validation
 
 Do not use it for generic Cloudflare architecture, Workers or Pages deployment, wildcard/path
-routing, private-network or VPN access, other protocols, or services that do not run on this Mac.
+routing, private-network or VPN access, other protocols, or services that do not run on this publishing host.
 
 ## Inputs
 
@@ -94,7 +102,8 @@ A login redirect fails SSH preflight instead of opening a browser. Keep client c
 2. When auth is missing or noninteractive setup needs credentials, direct the operator to the local
    terminal setup prompt or a short-lived `CLOUDFLARE_API_TOKEN` process environment; never ask for
    token values in chat.
-3. Use `service` commands only for local launchd connector lifecycle and logs.
+3. Use `service` commands only for local native user-connector lifecycle and logs (launchd on Mac,
+   systemd `--user` on Linux). Linux stop disables automatic startup and confirms inactivity.
 4. Use `discover` commands before setup when account, zone, organization, or tunnel IDs are
    unknown.
 5. Use `plan` before publication removal, guard enablement, tunnel recovery, or uncertain
@@ -112,7 +121,7 @@ Ordinary writes compare the complete supported tunnel configuration and refuse f
 setup refresh is not an overwrite/reset command. Withdrawal is persisted before route changes,
 and cleanup waits for the exact configuration version on all observed active connectors. Unknown
 or stale replica application keeps the operation pending. Refresh does not resurrect a withdrawn
-route. Use `setup` for owned local token-file or launch-agent repair only when no incompatible
+route. Use `setup` for owned local token-file or native service-file repair only when no incompatible
 transition is pending.
 
 ## Interrupted writes
@@ -138,9 +147,9 @@ sessions. Teardown retains Access until the exact tunnel is confirmed deleted.
   local publication product is the right boundary.
 - [Product Contract](references/product-contract.md): load before changing operator behavior,
   explaining ownership, or comparing product and remote Cloudflare state.
-- [Operator Recipes](references/operator-recipes.md): load when giving concrete setup, publish,
+- [Operator Recipes](references/operator-recipes.md): load before Linux bootstrap or when giving concrete setup, publish,
   verify, recovery, token, guard, remove, or teardown commands.
-- [State And Recovery](references/state-and-recovery.md): load when manager state, launchd,
+- [State And Recovery](references/state-and-recovery.md): load when manager state, native user service,
   `cloudflared`, logs, drift, or incident recovery is in scope.
 - [Source And Discovery](references/source-and-discovery.md): load when the PATH command, checkout,
   install posture, or source-edit boundary is uncertain.
@@ -149,8 +158,8 @@ sessions. Teardown retains Access until the exact tunnel is confirmed deleted.
   probing beyond the CLI.
 - [Inspect Manager](scripts/inspect-manager.sh): run for read-only local manager inspection; it does
   not mutate Cloudflare or local manager state and does not print secret values. It reads command
-  discovery, `cloudflared --version`, launchd state and file/log metadata. An optional standalone
-  PATH Python enables allowlisted plist/state parsing; without one, it reports skipped parsing
+  discovery, `cloudflared --version`, native service and file/log metadata. An optional standalone
+  PATH Python enables allowlisted macOS plist/state parsing or Linux state parsing; without one, it reports skipped parsing
   and retains metadata-only diagnosis. It never invokes Apple's developer-tools Python shim or
   requires installing Python/Xcode. The uv-installed CLI has its own interpreter.
 
@@ -160,4 +169,7 @@ An explanation can establish product scope from its source contract without clai
 manager readiness. Package validation checks source structure, not live activation or usefulness.
 For installed operations, report the observed publication, audience, recovery, or teardown outcome
 and any unresolved checks. When editing the inspection script, validate its shell syntax with
-`bash -n scripts/inspect-manager.sh`; running it against the Mac is separate local-state evidence.
+`bash -n scripts/inspect-manager.sh`; running it against a real publishing host is separate local-state evidence.
+Hermetic tests are not Linux live acceptance, device pairing, HTTPS/WSS authorization, or local
+inference proof. For native web/iPhone clients, do not assume Access headers/login: `public` requires
+approved exposure and application-owned fail-closed pairing/session checks, not merely a health 200.

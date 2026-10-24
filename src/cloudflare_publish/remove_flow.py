@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from cloudflare_publish.cloudflare_api import CloudflareApi
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.console import Console
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
-from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
 from cloudflare_publish.local_connector_observation import LocalConnectorObserver
 from cloudflare_publish.models import AppPaths, ManagedPublication
 from cloudflare_publish.publication_remote import (
@@ -15,6 +14,7 @@ from cloudflare_publish.publication_remote import (
     delete_publication_remote,
     require_known_tunnel_configuration,
 )
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import replace_publications
 from cloudflare_publish.transitions import Mutation, require_no_pending
 from cloudflare_publish.workflow_support import load_api_token, require_manifest
@@ -24,9 +24,9 @@ def run_remove(
     *,
     publication_name: str,
     paths: AppPaths,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
-    launchd: Launchd,
+    launchd: ConnectorService,
     console: Console,
     api_token: str | None = None,
 ) -> ManagedPublication:

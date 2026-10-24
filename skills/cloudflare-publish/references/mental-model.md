@@ -5,17 +5,17 @@ compute.
 
 ## Resource model
 
-- one macOS user profile
+- one macOS or Linux host/user profile
 - one Cloudflare account
 - one active full Cloudflare-managed DNS zone
-- one shared remotely managed Cloudflare Tunnel
+- one distinct remotely managed Cloudflare Tunnel per host/profile, shared by its publications
 - many exact-hostname HTTP, HTTPS, or machine-authenticated SSH publications
 - zero or one Cloudflare Access application plus policies per publication
 - zero or one publication-scoped service token per publication
 
 ## Publication path
 
-1. a local HTTP, HTTPS, or already configured SSH service runs on this Mac
+1. a local HTTP, HTTPS, or already configured SSH service runs on this publishing host
 2. `cloudflare-publish` binds that origin to one exact hostname on the shared tunnel
 3. the product creates or updates the Cloudflare DNS record and audience-specific Access resources
    for that hostname
@@ -40,6 +40,8 @@ Typical loops:
   login still gets a browser check
 - provider callback with request signatures -> one public hostname -> no Access resources and the
   unsigned verification request reaches the origin's denial
+- Linux-hosted device-authenticated web/iPhone backend -> its own public HTTPS/WSS hostname -> the
+  application rejects unauthorized sensitive requests and owns pairing; no Mac relay or Access-header assumption
 - existing publication looks stale -> `doctor`, `inspect`, `verify`, or `repair plan` identifies the
   safest next terminal command
 - a completed publication's machine credential is lost -> explicit `token rotate NAME --yes`
@@ -58,7 +60,7 @@ Typical loops:
 
 - publish a local web demo on one hostname
 - expose a local API behind Access
-- give this Mac's existing SSH server a stable hostname with machine authentication and host-key pinning
+- give this host's existing SSH server a stable hostname with machine authentication and host-key pinning
 - verify or repair the local manager state
 - rotate one publication service token
 - recover after tunnel-token drift or connector compromise
@@ -71,13 +73,22 @@ Typical loops:
 
 ## SSH trust and reachability
 
-An SSH hostname follows the Mac's outbound connector rather than its changing public IP. No
-inbound port forwarding or dynamic DNS is needed, but the Mac must stay awake and connected.
+An SSH hostname follows the host's outbound connector rather than its changing public IP. No
+inbound port forwarding or dynamic DNS is needed, but the host must stay awake and connected.
 Cloudflare carries the transport and remains a third party and availability dependency. Strictly
 pinned native SSH keeps its inner contents encrypted end-to-end; the Access token authorizes the
 outer transport and is not an SSH login key. WebSocket transport can disconnect. Separate remote
 installation owns login keys, bounded reverse forwarding, and supervision; none is implied by
-publishing this Mac's hostname.
+publishing this host's hostname.
+
+## Host ownership
+
+macOS retains launchd, Keychain and `~/Library` paths. Linux owns one systemd user unit and
+private files under `~/.local/state/cloudflare-publish/`, with systemd 240+, a usable user bus and
+operator-enabled lingering. The product never uses sudo or creates system services. Linux secret
+files provide POSIX access control, not encryption at rest or protection from root/the same UID.
+Each independent backend creates a distinct tunnel; copying another host's manager is not bootstrap.
+Origin application lifecycle and device authentication remain with their application owner.
 
 ## Interrupted changes
 

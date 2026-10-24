@@ -37,9 +37,48 @@ operation.
 
 The selected zone must be `active` and `full`. Partial (`CNAME`) zones are blocked because the
 product manages Cloudflare DNS records directly.
-If the operator wants `setup --install-deps`, Homebrew must already be on `PATH`.
+Only macOS supports `setup --install-deps`; Homebrew must already be on `PATH`.
+Linux dependencies are externally installed, never by the product.
 
-## Take over conflicting local cloudflared ownership
+### Linux prerequisites and bootstrap inputs
+
+Run as the intended host user. Have Python 3.12+, `uv`, official `cloudflared` 2025.4.0+, `curl`
+and `lsof` available before installing the CLI from the exact reviewed source or package root.
+Check native prerequisites without reading secrets:
+
+```bash
+uname -m
+systemctl --version
+systemctl --user show --property=Version --value
+loginctl show-user "$(id -u)" --property=Linger --value
+command -v uv curl cloudflared lsof
+cloudflared --version
+```
+
+Expect systemd 240+, working user-manager access, and lingering `yes`. Select binaries matching the
+reported host architecture. ARM64/DGX is this candidate's deployment target, not an admission lock
+or a claim of live hardware qualification.
+If missing, the host operator/admin arranges the user manager and `loginctl enable-linger USERNAME`
+under host policy; this product never invokes sudo, enables lingering, installs dependencies, or
+creates a system service. Setup diagnoses these before creating Cloudflare resources.
+
+Required inputs are the approved account/active full zone and scoped token grant, a distinct logical
+tunnel name for this host/profile, exact approved hostname, local origin URL and audience, plus the
+application's actual sensitive verification path/status (or trusted Ed25519 pin for SSH). Use local
+prompt/private-dotenv secret ingress. Each independent host creates its own remotely managed tunnel;
+do not copy Mac state, token files or credentials, or use independent backends as replicas. Then run
+the common setup, plan, confirmed apply and `verify --live` sequence. Installing this candidate is
+not permission to expose an endpoint, issue a grant, or publish a source/catalog release.
+
+Before claiming live acceptance, the integration owner checks the installed candidate, exact unit
+ownership and user-service lifecycle, persistence across authorized logout/reboot, private-store
+permissions, exact connector-PID/listener configuration evidence and pending-transition recovery.
+For native clients, also run sensitive HTTPS/WSS requests with missing/invalid/revoked application
+credentials and authenticated requests through the approved hostname. Check actual pairing/device
+use separately; hermetic tests or a health response do not prove it. The origin's own service
+lifecycle is independent of the connector and remains with its application owner.
+
+## Take over conflicting local cloudflared ownership (macOS only)
 
 ```bash
 cloudflare-publish setup --takeover --yes \
@@ -49,6 +88,8 @@ cloudflare-publish setup --takeover --yes \
 
 Use this only when the workstation still owns the generic launch agent or `~/.cloudflared`
  state. The product backs up and removes only the known conflicting surfaces.
+Linux refuses takeover, including legacy/system-wide services. Their owner must resolve conflicts
+separately; the product does not adopt them.
 
 ## Refresh an existing manager
 
@@ -56,7 +97,7 @@ Use this only when the workstation still owns the generic launch agent or `~/.cl
 cloudflare-publish setup
 ```
 
-Use this for owned local tunnel-token-file or launch-agent drift when no incompatible mutation is
+Use this for owned local tunnel-token-file or native user-service drift when no incompatible mutation is
 pending. It compares the complete remote configuration before writing; foreign routes, options,
 or unsupported fields are refused, not reset. The exact owned pre-validator configuration can be
 upgraded to native per-route Access validation. Refresh cannot change the selected account, zone,
@@ -101,7 +142,7 @@ cloudflare-publish --json publish plan dashboard \
 
 ## Publish native SSH
 
-The Mac's SSH server must already run and have independently authorized login users and keys.
+The publishing host's SSH server must already run and have independently authorized login users and keys.
 Publishing does not enable Remote Login or change `sshd`, user accounts, or `authorized_keys`.
 The operator must acquire the Ed25519 public host key through a trusted path, such as reading the
 local `/etc/ssh/ssh_host_ed25519_key.pub`. A key discovered over the new public hostname is not an
@@ -240,6 +281,12 @@ pairing surface and evidence that sensitive requests fail closed. `public` means
 application authentication. Do not add a custom gateway merely to preserve an unsuitable Access
 mode.
 
+For independent T3-style Linux backends, each host/profile publishes its own hostname and distinct
+tunnel directly to its local backend, never through a Mac proxy or ad-hoc fourth publisher. T3 owns
+pairing and device/session authentication. Inspect the installed client's actual HTTPS/WSS auth
+contract; an iPhone is not assumed to support Access headers or an Access browser flow. New hostname
+selection and Cloudflare credentials/grants require explicit approval independently of this recipe.
+
 - Select a real sensitive endpoint for `--verify-path` and its narrow denial status for
   `--expect-status`. Check unauthenticated denial locally and through the hostname. An intentionally
   public descriptor or a `200` from SPA fallback proves neither an authentication bypass nor
@@ -329,7 +376,7 @@ without deletion metadata is not a deletion tombstone. This read does not author
 
 ## Local connector lifecycle
 
-Use these commands for local launchd connector control only:
+Use these commands for local native user-connector control only (launchd on macOS, systemd on Linux):
 
 ```bash
 cloudflare-publish service status
@@ -339,9 +386,11 @@ cloudflare-publish service restart
 cloudflare-publish service logs
 ```
 
-`service start` loads or kickstarts an existing canonical launch-agent plist. It fails closed when
-the plist label, token-file argument, or encoded `cloudflared` binary does not match the manager
-contract. It does not bootstrap a new manager. Use `setup` when the plist or tunnel token is
+`service start` loads or kickstarts the macOS canonical plist, or enables/starts the Linux canonical
+user unit. It fails closed when the service identity, token-file argument, or absolute `cloudflared`
+binary does not match the manager contract. Linux stop disables automatic startup and confirms
+inactivity; teardown removes only the owned unit and reloads the user manager. None of these commands
+bootstrap a new manager. Use `setup` when the native service file or tunnel token is
 missing, and use `verify` when remote Cloudflare parity matters.
 
 Keep connector lifecycle commands, publication inventory, verification, guard inspection,
@@ -365,7 +414,7 @@ Effects:
 
 - fetches the current tunnel token
 - rewrites the local token file
-- reinstalls and restarts the local launch agent
+- reinstalls and restarts the canonical local user service
 - deletes all shared-tunnel connectors through the Cloudflare API
 
 Blast radius:

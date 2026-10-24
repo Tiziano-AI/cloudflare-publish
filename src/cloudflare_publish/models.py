@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from cloudflare_publish.host_platform import HostPlatform
 from cloudflare_publish.json_types import JsonObject
 
 CheckGroup = Literal["manager", "routing", "origin", "access", "public_probe"]
@@ -22,14 +23,29 @@ DEFAULT_VERIFY_PATH = "/"
 
 
 @dataclass(frozen=True)
+class ConnectorStatus:
+    """Native service process state, not tunnel readiness or application evidence."""
+
+    pid: int | None
+    status: int | None
+
+    @property
+    def running(self) -> bool:
+        """Return whether the native service manager reports a process."""
+
+        return self.pid is not None and self.pid > 0
+
+
+@dataclass(frozen=True)
 class AppPaths:
     """Canonical local filesystem paths owned or inspected by the repo."""
 
     repo_root: Path
     home: Path
-    launch_agents_dir: Path
-    canonical_launch_agent_file: Path
-    legacy_launch_agent_file: Path
+    host_platform: HostPlatform
+    service_dir: Path
+    service_file: Path
+    legacy_service_file: Path
     state_dir: Path
     state_file: Path
     backups_dir: Path
@@ -51,8 +67,10 @@ class AppPaths:
 
     @property
     def service_target(self) -> str:
-        """Return the canonical launchd service target."""
+        """Return the canonical native user-service target."""
 
+        if self.host_platform == "linux":
+            return "cloudflare-publish.service"
         return f"{self.domain_target}/{CANONICAL_LABEL}"
 
     @property
@@ -60,7 +78,7 @@ class AppPaths:
         """Return the local files and directories managed by the repo."""
 
         return (
-            self.canonical_launch_agent_file,
+            self.service_file,
             self.state_file,
             self.tunnel_token_file,
             self.logs_dir,

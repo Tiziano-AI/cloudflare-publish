@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cloudflare_publish.cloudflared import Cloudflared
+from cloudflare_publish.connector_service import ConnectorService, build_connector_service
 from cloudflare_publish.http import CurlHttpClient
 from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
 from cloudflare_publish.models import AppPaths
 from cloudflare_publish.paths import build_paths
 from cloudflare_publish.process import CommandRunner
+from cloudflare_publish.secret_store import FileSecretStore, SecretStore
 
 
 @dataclass(frozen=True)
@@ -21,8 +22,8 @@ class CliRuntime:
     paths: AppPaths
     cloudflared: Cloudflared
     http: CurlHttpClient
-    keychain: Keychain
-    launchd: Launchd
+    keychain: SecretStore
+    launchd: ConnectorService
 
 
 def build_cli_runtime(*, repo_root: Path | None, home: Path | None) -> CliRuntime:
@@ -36,6 +37,10 @@ def build_cli_runtime(*, repo_root: Path | None, home: Path | None) -> CliRuntim
         paths=paths,
         cloudflared=Cloudflared(runner),
         http=CurlHttpClient(runner),
-        keychain=Keychain(runner),
-        launchd=Launchd(runner, paths),
+        keychain=(
+            Keychain(runner)
+            if paths.host_platform == "darwin"
+            else FileSecretStore(paths.state_dir / "credentials")
+        ),
+        launchd=build_connector_service(runner, paths),
     )

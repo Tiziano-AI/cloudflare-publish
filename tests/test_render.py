@@ -232,14 +232,14 @@ def test_status_matches_range() -> None:
 def test_build_paths_uses_manager_locations(tmp_path: Path) -> None:
     """Canonical manager and conflict paths point at the expected locations."""
 
-    paths = build_paths(repo_root=tmp_path / "repo", home=tmp_path / "home")
+    paths = build_paths(repo_root=tmp_path / "repo", home=tmp_path / "home", platform="darwin")
     assert (
         paths.state_dir
         == tmp_path / "home" / "Library" / "Application Support" / "cloudflare-publish"
     )
     assert paths.logs_dir == tmp_path / "home" / "Library" / "Logs" / "cloudflare-publish"
     assert (
-        paths.legacy_launch_agent_file
+        paths.legacy_service_file
         == tmp_path / "home" / "Library" / "LaunchAgents" / "com.cloudflare.cloudflared.plist"
     )
     assert paths.legacy_cloudflared_config_file == tmp_path / "home" / ".cloudflared" / "config.yml"

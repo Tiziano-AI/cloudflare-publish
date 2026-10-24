@@ -10,6 +10,7 @@ from typing import Literal
 
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.models import AppPaths
+from cloudflare_publish.private_files import ensure_private_directory
 
 
 class ManagerWriterLock:
@@ -25,7 +26,10 @@ class ManagerWriterLock:
         """Acquire before workflow reads or writes, failing promptly on contention."""
 
         try:
-            self._paths.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if self._paths.host_platform == "linux":
+                ensure_private_directory(self._paths.state_dir)
+            else:
+                self._paths.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
             descriptor = os.open(
                 self._paths.state_dir / "manager.lock",
                 os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
@@ -36,9 +40,19 @@ class ManagerWriterLock:
                 "Cannot open the manager writer lock.", code="manager_lock_failed"
             ) from error
         try:
-            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
                 raise AppError(
                     "Manager writer lock must be a regular file.", code="manager_lock_failed"
+                )
+            if self._paths.host_platform == "linux" and (
+                metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+            ):
+                raise AppError(
+                    "Linux manager writer lock must be an owned private single-link file.",
+                    code="manager_lock_failed",
                 )
             os.fchmod(descriptor, 0o600)
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)

@@ -6,9 +6,9 @@ import os
 from dataclasses import dataclass
 
 from cloudflare_publish.errors import AppError
-from cloudflare_publish.keychain import Keychain
 from cloudflare_publish.local_secrets import local_secret_env_value
 from cloudflare_publish.models import AppPaths
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import load_manifest
 
 
@@ -29,10 +29,10 @@ class ApiTokenResolution:
 def resolve_api_token(
     *,
     explicit_token: str | None,
-    keychain: Keychain,
+    keychain: SecretStore,
     paths: AppPaths,
 ) -> ApiTokenResolution:
-    """Resolve an API token using flag, environment, local slice, then Keychain."""
+    """Resolve an API token using flag, environment, local slice, then the host store."""
 
     if explicit_token is not None and explicit_token.strip():
         return ApiTokenResolution(token=explicit_token.strip(), source="flag")
@@ -49,13 +49,15 @@ def resolve_api_token(
         token = keychain.load_secret(account=manifest.manager.api_token_keychain_account)
     except AppError:
         return ApiTokenResolution(token=None, source="missing")
-    return ApiTokenResolution(token=token, source="keychain")
+    return ApiTokenResolution(
+        token=token, source="keychain" if paths.host_platform == "darwin" else "private_file"
+    )
 
 
 def require_api_token(
     *,
     explicit_token: str | None,
-    keychain: Keychain,
+    keychain: SecretStore,
     paths: AppPaths,
 ) -> ApiTokenResolution:
     """Resolve an API token or fail with setup guidance."""
@@ -72,7 +74,7 @@ def require_api_token(
                 (
                     "Use the setup prompt, set CLOUDFLARE_API_TOKEN, populate "
                     "CLOUDFLARE_PUBLISH_DOTENV with an absolute private dotenv path, or run setup "
-                    "so the token is stored in Keychain."
+                    "so the token is stored in the host credential store."
                 ),
             ),
             code="missing_api_token",

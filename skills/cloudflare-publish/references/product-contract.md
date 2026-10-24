@@ -1,7 +1,7 @@
 # Product Contract
 
 `cloudflare-publish` is the canonical local product for publishing exact hostnames from one macOS
-user profile through one shared remotely managed Cloudflare Tunnel. Protected audiences use
+or Linux host/user profile through its own remotely managed Cloudflare Tunnel. Protected audiences use
 Cloudflare Access; `public` deliberately delegates request authentication to a fail-closed origin.
 
 It publishes running local HTTP, HTTPS, or machine-authenticated native SSH services. It does not
@@ -9,7 +9,7 @@ deploy application code into Cloudflare compute.
 
 ## Product model
 
-- one local origin on this Mac
+- one local origin on this publishing host
 - one exact hostname in one active full Cloudflare-managed DNS zone
 - zero or one Cloudflare Access application plus policies for that hostname
 - one shared tunnel carrying traffic from the hostname to the local origin
@@ -23,25 +23,49 @@ deploy application code into Cloudflare compute.
   plugin does not install the CLI, cloudflared, credentials, services, or Cloudflare resources.
   Removing it does not retire those independently owned resources; use deliberate CLI teardown
   before uninstalling the CLI if complete manager retirement is intended.
-- local manager state:
+- macOS manager state:
   - `~/Library/Application Support/cloudflare-publish/state.json`
   - `~/Library/Application Support/cloudflare-publish/manager.lock`
   - `~/Library/Application Support/cloudflare-publish/tunnel-token.txt`
   - `~/Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist`
+- Linux manager state:
+  - `~/.local/state/cloudflare-publish/state.json`
+  - `~/.local/state/cloudflare-publish/manager.lock`
+  - `~/.local/state/cloudflare-publish/tunnel-token.txt`
+  - `~/.local/state/cloudflare-publish/credentials/`
+  - `~/.local/state/cloudflare-publish/logs/`
+  - `~/.config/systemd/user/cloudflare-publish.service`
 - local secrets:
-  - Cloudflare API token in macOS Keychain after setup
+  - Cloudflare API token in the platform store after setup: macOS Keychain or Linux private files
   - optional bootstrap API token ingress from a strict private dotenv only when
     `CLOUDFLARE_PUBLISH_DOTENV` points at an absolute path outside the repository
-  - Access service-token secrets in macOS Keychain
+  - Access service-token secrets in the same platform store
 - secret process posture:
-  - The CLI reads only process environment, the explicitly configured private dotenv, and Keychain.
+  - The CLI reads only process environment, the explicitly configured private dotenv, and its platform store.
   - The CLI does not infer workstation secret roots, read master secret pools, or follow private
     dotenv symlinks.
-  - Keychain writes send a bounded `security -q -i` command with a hex-encoded token over stdin,
+  - macOS Keychain writes send a bounded `security -q -i` command with a hex-encoded token over stdin,
     never argv, and require exact readback before reporting success. Only nonempty printable ASCII
     credentials are supported; a write error never includes the credential-bearing command/output.
+  - Linux stores one file per opaque account reference in a current-UID mode-0700 `credentials/`
+    directory. Files must be current-UID mode-0600 regular single-link files, opened without
+    following symlinks. Writes use private atomic replacement and exact readback; unsafe paths,
+    failed writes and unconfirmed deletion fail closed without printing values. This is POSIX
+    access control, not encryption at rest or protection from root/the same UID. Existing
+    `*_keychain_account` manifest fields are opaque references, not a platform choice.
   - Curl receives bearer headers, Access service-token headers, and JSON bodies through
     strict-permission temporary files, not argv, and disables user curlrc configuration.
+
+Linux requires systemd 240+, a working user bus and operator-arranged `Linger=yes` before setup.
+It manages only its canonical user unit, using an absolute cloudflared binary, `--token-file`,
+restrictive umask and private append logs. Start enables the unit; stop disables it and confirms
+inactivity. Teardown retains its exact owned unit at
+`~/.config/systemd/user/.cloudflare-publish.service.retiring` until reload and native absence are
+confirmed; an interruption resumes with `teardown --yes`, not by deleting custody or running setup.
+Setup/start refuse incomplete retirement. It never invokes
+sudo, enables lingering, installs Linux packages, creates system services, or adopts legacy
+ownership. `--install-deps` and confirmed legacy takeover remain macOS-only. Every independent
+host/profile creates a distinct tunnel; do not copy another host's state or credentials.
 
 ## Product boundary
 
@@ -112,7 +136,7 @@ only in ignored operator overlays.
 ## Recovery law
 
 - Use `service start`, `service stop`, and `service restart` only for local connector lifecycle.
-- Use `setup` for owned tunnel-token-file and launch-agent refresh, not as a reset of arbitrary
+- Use `setup` for owned tunnel-token-file and native user-service refresh, not as a reset of arbitrary
   remote config drift. It validates the full configuration first; only exact owned or exact
   pre-validator configuration is admitted. Account, zone and tunnel identity cannot change there.
 - Use `repair plan` to inspect repair needs without changing managed local or Cloudflare state.
@@ -243,4 +267,4 @@ when Service Auth blocks a request; despite its name it does not enable a login 
 public probing requires that flag, exact policy parity, and anonymous HTTP 401/403. The service
 token authorizes transport, not SSH login. Cloudflare carries the outer traffic and remains a dependency; strict SSH host-key
 pinning protects the native SSH contents. WebSocket transport may disconnect; separate supervisors
-own persistent SSH sessions. A stable hostname does not make a sleeping or offline Mac available.
+own persistent SSH sessions. A stable hostname does not make a sleeping or offline host available.

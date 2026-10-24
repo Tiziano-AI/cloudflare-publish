@@ -5,14 +5,14 @@ from __future__ import annotations
 from cloudflare_publish.cloudflare_api import CloudflareApi
 from cloudflare_publish.cloudflare_contract import TunnelRef
 from cloudflare_publish.cloudflared import Cloudflared
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.console import Console
 from cloudflare_publish.http import CurlHttpClient
-from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
 from cloudflare_publish.models import AppPaths
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.workflow_support import (
     ensure_platform_tools,
-    install_launch_agent,
+    install_connector_service,
     load_api_token,
     require_manifest,
     write_tunnel_token,
@@ -23,8 +23,8 @@ def run_tunnel_recover(
     *,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
     api_token: str | None = None,
@@ -56,7 +56,7 @@ def run_tunnel_recover(
         tunnel_id=manifest.manager.tunnel_id,
     )
     write_tunnel_token(paths, tunnel_token)
-    install_launch_agent(paths=paths, cloudflared=cloudflared, launchd=launchd)
+    install_connector_service(cloudflared=cloudflared, launchd=launchd)
     api.cleanup_tunnel_connections(
         account_id=manifest.manager.account_id,
         tunnel_id=manifest.manager.tunnel_id,

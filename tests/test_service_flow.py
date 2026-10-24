@@ -40,7 +40,7 @@ def test_service_start_stop_restart_use_existing_launch_agent(
 
     assert main(["service", "restart"], repo_root=fake_environment.repo_root) == 0
     captured = capsys.readouterr()
-    assert "Connector kickstarted" in captured.out
+    assert "Connector restarted" in captured.out
     assert fake_environment.cleaned_tunnel_ids() == ()
 
 
@@ -56,7 +56,7 @@ def test_service_start_kickstarts_loaded_but_crashed_connector(
 
     assert main(["service", "start"], repo_root=fake_environment.repo_root) == 0
     captured = capsys.readouterr()
-    assert "Connector kickstarted" in captured.out
+    assert "Connector started" in captured.out
     assert fake_environment.kickstart_count() == before + 1
 
 

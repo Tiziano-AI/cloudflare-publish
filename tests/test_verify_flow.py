@@ -264,7 +264,7 @@ def test_pending_setup_remains_visible_even_before_keychain_credentials_exist(
 
 
 def _collect(tmp_path: Path, publication_name: str | None = None) -> tuple[CheckResult, ...]:
-    paths = build_paths(repo_root=tmp_path / "repo", home=tmp_path / "home")
+    paths = build_paths(repo_root=tmp_path / "repo", home=tmp_path / "home", platform="darwin")
     runner = CommandRunner()
     return collect_verify_checks(
         paths=paths,

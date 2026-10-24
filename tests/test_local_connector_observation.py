@@ -29,7 +29,7 @@ class _OwnedProcess(Launchd):
         self.commands: list[list[str]] = []
         self.lsof_status: int = 0
 
-    def service(self, label: str) -> LaunchdService | None:
+    def service(self, label: str = CANONICAL_LABEL) -> LaunchdService | None:
         assert label == CANONICAL_LABEL
         return LaunchdService(label=label, pid=self.pids.pop(0), status=0)
 

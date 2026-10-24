@@ -6,10 +6,10 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.launchd import Launchd
 from cloudflare_publish.models import (
-    LEGACY_CLOUDFLARED_LABEL,
     AppPaths,
     BackupRecord,
     StateManifest,
@@ -24,6 +24,7 @@ class OwnershipInspection:
     manifest: StateManifest | None
     conflicting_paths: tuple[Path, ...]
     conflicting_labels: tuple[str, ...]
+    takeover_supported: bool = True
 
     @property
     def requires_takeover(self) -> bool:
@@ -32,19 +33,17 @@ class OwnershipInspection:
         return bool(self.conflicting_paths or self.conflicting_labels)
 
 
-def inspect_ownership(paths: AppPaths, launchd: Launchd) -> OwnershipInspection:
+def inspect_ownership(paths: AppPaths, launchd: ConnectorService) -> OwnershipInspection:
     """Inspect canonical local state and known legacy conflicts."""
 
     manifest = load_manifest(paths.state_file)
     conflicting_paths = _existing_conflict_paths(paths)
-    loaded_labels = set(launchd.list_labels())
-    conflicting_labels = tuple(
-        label for label in (LEGACY_CLOUDFLARED_LABEL,) if label in loaded_labels
-    )
+    conflicting_labels = launchd.conflicting_services()
     return OwnershipInspection(
         manifest=manifest,
         conflicting_paths=conflicting_paths,
         conflicting_labels=conflicting_labels,
+        takeover_supported=paths.host_platform == "darwin",
     )
 
 
@@ -53,11 +52,16 @@ def require_takeover(inspection: OwnershipInspection) -> None:
 
     hints: list[str] = []
     if inspection.conflicting_labels:
-        hints.append("Loaded launchd labels: " + ", ".join(inspection.conflicting_labels))
+        hints.append("Conflicting native services: " + ", ".join(inspection.conflicting_labels))
     if inspection.conflicting_paths:
         hints.extend(str(path) for path in inspection.conflicting_paths)
     raise AppError(
-        "Conflicting local cloudflared state exists. Re-run setup with --takeover after review.",
+        "Conflicting local cloudflared state exists. Re-run setup with --takeover after review."
+        if inspection.takeover_supported
+        else (
+            "Conflicting Linux cloudflared state exists. "
+            "Resolve it explicitly; Linux takeover is not supported."
+        ),
         hints=tuple(hints),
     )
 
@@ -65,6 +69,8 @@ def require_takeover(inspection: OwnershipInspection) -> None:
 def create_backup(paths: AppPaths, inspection: OwnershipInspection) -> BackupRecord:
     """Copy known conflicting local paths into a timestamped takeover backup."""
 
+    if paths.host_platform != "darwin":
+        raise AppError("Linux legacy takeover is not supported.")
     timestamp = now_rfc3339().replace(":", "-")
     backup_dir = paths.backups_dir / timestamp
     copied_paths: list[Path] = []
@@ -85,13 +91,17 @@ def create_backup(paths: AppPaths, inspection: OwnershipInspection) -> BackupRec
     )
 
 
-def cleanup_conflicts(paths: AppPaths, launchd: Launchd, inspection: OwnershipInspection) -> None:
+def cleanup_conflicts(
+    paths: AppPaths, launchd: ConnectorService, inspection: OwnershipInspection
+) -> None:
     """Remove known legacy local state after a successful backup."""
 
+    if paths.host_platform != "darwin" or not isinstance(launchd, Launchd):
+        raise AppError("Linux legacy takeover is not supported.")
     for label in inspection.conflicting_labels:
         launchd.bootout(label)
     for file_path in (
-        paths.legacy_launch_agent_file,
+        paths.legacy_service_file,
         paths.legacy_cloudflared_config_file,
         paths.legacy_cloudflared_cert_file,
     ):
@@ -104,8 +114,14 @@ def cleanup_conflicts(paths: AppPaths, launchd: Launchd, inspection: OwnershipIn
 def _existing_conflict_paths(paths: AppPaths) -> tuple[Path, ...]:
     """Return existing legacy local paths that the new manager must not ignore."""
 
+    if paths.host_platform == "linux":
+        return tuple(
+            path
+            for path in (paths.legacy_service_file, paths.legacy_cloudflared_dir)
+            if path.exists() or path.is_symlink()
+        )
     candidates = (
-        paths.legacy_launch_agent_file,
+        paths.legacy_service_file,
         paths.legacy_cloudflared_config_file,
         paths.legacy_cloudflared_cert_file,
     )

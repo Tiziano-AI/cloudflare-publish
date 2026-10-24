@@ -27,17 +27,32 @@ def _inspect(
     agent: bytes | None = None,
     state: str | None = None,
     python_mode: Literal["available", "missing", "unusable"] = "available",
+    platform: str = "Darwin",
+    service_metadata: str = "Id=cloudflare-publish.service\nActiveState=active\nMainPID=123\n",
+    user_bus_available: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    """Run against synthetic files and commands, never the user's launchd service."""
+    """Run against synthetic files and commands, never a host's real user service."""
 
     user_dir = tmp_path / "user"
     user_dir.mkdir()
+    linux = platform == "Linux"
     if agent is not None:
-        agent_dir = user_dir / "Library" / "LaunchAgents"
+        agent_dir = (
+            user_dir / ".config" / "systemd" / "user"
+            if linux
+            else user_dir / "Library" / "LaunchAgents"
+        )
         agent_dir.mkdir(parents=True)
-        (agent_dir / "com.cloudflare-publish.cloudflared.plist").write_bytes(agent)
+        filename = (
+            "cloudflare-publish.service" if linux else "com.cloudflare-publish.cloudflared.plist"
+        )
+        (agent_dir / filename).write_bytes(agent)
     if state is not None:
-        state_dir = user_dir / "Library" / "Application Support" / "cloudflare-publish"
+        state_dir = (
+            user_dir / ".local" / "state" / "cloudflare-publish"
+            if linux
+            else user_dir / "Library" / "Application Support" / "cloudflare-publish"
+        )
         state_dir.mkdir(parents=True)
         (state_dir / "state.json").write_text(state, encoding="utf-8")
     binaries = tmp_path / "bin"
@@ -65,6 +80,21 @@ def _inspect(
         encoding="utf-8",
     )
     launcher.chmod(0o755)
+    for command, body in {
+        "uname": f"print({platform!r})",
+        "id": "print('123')",
+        "loginctl": "print('yes')",
+        "systemctl": (
+            "import sys\n"
+            "assert sys.argv[1:] == ['--user', 'show', 'cloudflare-publish.service', "
+            "'--property=Id,LoadState,ActiveState,SubState,UnitFileState,MainPID']\n"
+            f"print({service_metadata!r})\n"
+            f"sys.exit({0 if user_bus_available else 1})"
+        ),
+    }.items():
+        tool = binaries / command
+        tool.write_text(f"#!{sys.executable}\n{body}\n", encoding="utf-8")
+        tool.chmod(0o755)
     return subprocess.run(
         ["/bin/bash", str(SCRIPT)],
         check=False,
@@ -194,6 +224,56 @@ def test_diagnostic_handles_malformed_plist_without_dumping_it(
     assert "contents withheld" in completed.stdout
     assert "secret-invalid-data" not in completed.stdout + completed.stderr
     assert "Traceback" not in completed.stderr
+
+
+@pytest.mark.parametrize("python_mode", ["available", "missing", "unusable"])
+def test_linux_diagnostic_is_metadata_only_and_withholds_drift(
+    tmp_path: Path, python_mode: Literal["available", "missing", "unusable"]
+) -> None:
+    """Unknown unit/manager payloads cannot turn the inspector into a secret dump."""
+
+    completed = _inspect(
+        tmp_path,
+        platform="Linux",
+        python_mode=python_mode,
+        agent=b"[Service]\nExecStart=/bin/tool --token=inline-secret\nEnvironment=api-secret\n",
+        state='{"manager":{"api_token":"state-secret"},"publications":{}}',
+        service_metadata=(
+            "Id=unexpected-secret\nLoadState=loaded\nActiveState=active\n"
+            "SubState=running\nUnitFileState=enabled\nMainPID=123\n"
+            "Environment=unexpected-secret\nExecStart=unexpected-secret\n"
+            "LoadState=unexpected-secret\nMainPID=unexpected-secret\n"
+        ),
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "unit_identity_expected=0" in completed.stdout
+    assert "ActiveState=active" in completed.stdout
+    assert "LoadState=unknown; contents withheld" in completed.stdout
+    assert "MainPID=invalid; withheld" in completed.stdout
+    assert "user_linger=yes" in completed.stdout
+    assert ".config/systemd/user/cloudflare-publish.service" in completed.stdout
+    assert "launch agent" not in completed.stdout
+    for secret in ("inline-secret", "api-secret", "state-secret", "unexpected-secret"):
+        assert secret not in completed.stdout + completed.stderr
+
+
+def test_linux_diagnostic_reports_missing_user_bus_without_service_effects(tmp_path: Path) -> None:
+    """Failure to read the user manager is a gap, not an invitation to start one."""
+
+    completed = _inspect(tmp_path, platform="Linux", user_bus_available=False)
+    assert completed.returncode == 0, completed.stderr
+    assert "user_manager_metadata=unavailable" in completed.stdout
+    assert "user unit missing" in completed.stdout
+    assert "MainPID=" not in completed.stdout
+
+
+def test_diagnostic_rejects_unsupported_platform_before_inspection(tmp_path: Path) -> None:
+    """Do not accidentally inspect Mac or Linux state on another host."""
+
+    completed = _inspect(tmp_path, platform="FreeBSD")
+    assert completed.returncode == 1
+    assert completed.stdout == "unsupported host platform; no manager files or services inspected\n"
+    assert not completed.stderr
 
 
 def test_diagnostic_describes_ssh_without_http_readiness_claims(tmp_path: Path) -> None:

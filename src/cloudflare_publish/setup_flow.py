@@ -10,12 +10,11 @@ from cloudflare_publish.cloudflare_api import CloudflareApi
 from cloudflare_publish.cloudflare_contract import AccountRef, TunnelRef, ZoneRef
 from cloudflare_publish.cloudflared import Cloudflared
 from cloudflare_publish.config_application import require_configuration_applied
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.console import Console
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
 from cloudflare_publish.json_types import JsonObject
-from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
 from cloudflare_publish.local_connector_observation import LocalConnectorObserver
 from cloudflare_publish.models import (
     API_TOKEN_ACCOUNT,
@@ -34,6 +33,7 @@ from cloudflare_publish.ownership import (
     require_takeover,
 )
 from cloudflare_publish.render import build_tunnel_configuration
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import (
     build_initial_manifest,
     load_manifest,
@@ -47,7 +47,7 @@ from cloudflare_publish.tunnel_configuration import (
 from cloudflare_publish.workflow_support import (
     ensure_manager_directories,
     ensure_platform_tools,
-    install_launch_agent,
+    install_connector_service,
     load_api_token,
     write_tunnel_token,
 )
@@ -58,13 +58,27 @@ def run_setup(
     request: SetupRequest,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
 ) -> StateManifest:
     """Bootstrap or refresh the local manager."""
 
+    if paths.host_platform == "linux" and request.install_deps:
+        raise AppError(
+            "Automatic dependency installation is supported only on macOS through Homebrew.",
+            code="unsupported_dependency_install",
+            hints=("Install the documented Linux prerequisites before running setup.",),
+        )
+    if paths.host_platform == "linux" and request.takeover:
+        raise AppError(
+            "Legacy takeover is supported only on macOS.",
+            code="unsupported_takeover",
+            hints=(
+                "Resolve Linux legacy service/configuration ownership explicitly before setup.",
+            ),
+        )
     existing = load_manifest(paths.state_file)
     if request.refresh_only and existing is None:
         _raise_refresh_requires_manager()
@@ -190,8 +204,8 @@ def _complete_initial_setup(
     request: SetupRequest,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
 ) -> StateManifest:
@@ -303,8 +317,8 @@ def _run_setup_refresh(
     manifest: StateManifest,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
 ) -> StateManifest:
@@ -402,7 +416,7 @@ def _complete_setup_configuration(
     api: CloudflareApi,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
+    launchd: ConnectorService,
     http: CurlHttpClient,
     console: Console,
 ) -> StateManifest:
@@ -454,7 +468,7 @@ def _complete_setup_configuration(
     if mutation.pending.phase != "installed":
         token = api.get_tunnel_token(account_id=manager.account_id, tunnel_id=manager.tunnel_id)
         write_tunnel_token(paths, token)
-        install_launch_agent(paths=paths, cloudflared=cloudflared, launchd=launchd)
+        install_connector_service(cloudflared=cloudflared, launchd=launchd)
         mutation.save(pending=replace(mutation.pending, phase="installed"))
     observation = require_configuration_applied(
         api,

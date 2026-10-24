@@ -161,6 +161,9 @@ from pathlib import Path
 state_path = Path(os.environ["CLOUDFLARE_PUBLISH_TEST_STATE"])
 state = json.loads(state_path.read_text(encoding="utf-8"))
 args = sys.argv[1:]
+if state.get("record_native_calls"):
+    state.setdefault("launchctl_calls", []).append(args)
+    state_path.write_text(json.dumps(state, indent=2) + "\\n", encoding="utf-8")
 
 def save() -> None:
     state_path.write_text(json.dumps(state, indent=2) + "\\n", encoding="utf-8")
@@ -283,6 +286,9 @@ state_path = Path(os.environ["CLOUDFLARE_PUBLISH_TEST_STATE"])
 state = json.loads(state_path.read_text(encoding="utf-8"))
 args = sys.argv[1:]
 process_args = list(args)
+if state.get("record_native_calls"):
+    state.setdefault("security_calls", []).append(process_args)
+    state_path.write_text(json.dumps(state, indent=2) + "\\n", encoding="utf-8")
 if args == ["-q", "-i"]:
     args = shlex.split(sys.stdin.readline())
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cloudflare-publish"
 version = "0.3.2"
-description = "macOS CLI for publishing local HTTP(S) and SSH services through Cloudflare Tunnel and Access."
+description = "macOS and Linux CLI for publishing local HTTP(S) and SSH through Cloudflare Tunnel and Access."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

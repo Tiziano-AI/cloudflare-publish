@@ -385,7 +385,7 @@ def test_publication_can_transition_between_public_and_machine_access(
     )
     assert "the new public origin owns fail-closed request authentication" in public_effects
     assert "delete service token" in public_effects
-    assert "delete service-token Keychain secret" in public_effects
+    assert "delete service-token stored secret" in public_effects
     assert "create Access application with a distinct AUD" not in public_effects
 
     assert main([*common, "public"], repo_root=fake_environment.repo_root) == 0

@@ -9,8 +9,8 @@ from cloudflare_publish.cloudflare_contract import ServiceTokenSecret
 from cloudflare_publish.console import Console
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
-from cloudflare_publish.keychain import Keychain
 from cloudflare_publish.models import AppPaths, ManagedPublication
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import now_rfc3339, replace_publications
 from cloudflare_publish.transitions import Mutation
 from cloudflare_publish.workflow_support import load_api_token, require_manifest
@@ -20,7 +20,7 @@ def run_token_rotate(
     *,
     publication_name: str,
     paths: AppPaths,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
     api_token: str | None = None,
@@ -35,7 +35,9 @@ def run_token_rotate(
     if publication.state.service_token_id is None:
         raise AppError(f"Publication {publication_name!r} does not have a machine token.")
     if publication.state.service_token_keychain_account is None:
-        raise AppError(f"Publication {publication_name!r} is missing its token Keychain account.")
+        raise AppError(
+            f"Publication {publication_name!r} is missing its token credential reference."
+        )
     pending = manifest.pending
     if recover and (
         pending is None
@@ -128,7 +130,7 @@ def run_token_rotate(
         )
         != rotated.client_secret
     ):
-        raise AppError("The rotated service-token secret could not be verified in Keychain.")
+        raise AppError("The rotated service-token secret could not be verified in the host store.")
     updated_publication = ManagedPublication(
         spec=publication.spec,
         state=replace(

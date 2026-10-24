@@ -9,15 +9,13 @@ from cloudflare_publish.cloudflare_api import CloudflareApi
 from cloudflare_publish.cloudflare_contract import AccessPolicyRef, tunnel_cname
 from cloudflare_publish.cloudflared import Cloudflared
 from cloudflare_publish.config_application import require_configuration_applied
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.console import Console
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.guard_flow import guard_blocking_publication_names
 from cloudflare_publish.http import CurlHttpClient, HttpConnectToEntry
-from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
 from cloudflare_publish.local_connector_observation import LocalConnectorObserver
 from cloudflare_publish.models import (
-    CANONICAL_LABEL,
     CHECK_GROUPS,
     AppPaths,
     CheckGroup,
@@ -28,6 +26,7 @@ from cloudflare_publish.models import (
 )
 from cloudflare_publish.publication_contract import status_matches_range
 from cloudflare_publish.render import build_tunnel_configuration
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.ssh import SshProbe
 from cloudflare_publish.transitions import effective_publications
 from cloudflare_publish.tunnel_configuration import compare_tunnel_configuration
@@ -52,8 +51,8 @@ def run_verify(
     *,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     publication_name: str | None,
     live: bool,
@@ -93,8 +92,8 @@ def collect_verify_checks(
     *,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     publication_name: str | None,
     live: bool,
@@ -182,7 +181,7 @@ def _local_checks(
     *,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
+    launchd: ConnectorService,
     api: CloudflareApi,
     manifest: StateManifest,
     selected_names: tuple[str, ...],
@@ -196,10 +195,21 @@ def _local_checks(
         CheckResult("state.json exists", ok=paths.state_file.exists()),
         CheckResult("tunnel token file exists", ok=paths.tunnel_token_file.exists()),
         CheckResult(
-            "canonical launch agent file exists",
-            ok=paths.canonical_launch_agent_file.exists(),
+            (
+                "canonical launch agent file exists"
+                if paths.host_platform == "darwin"
+                else "canonical user service file exists"
+            ),
+            ok=paths.service_file.exists(),
         ),
-        CheckResult("launch agent loaded", ok=launchd.is_loaded(CANONICAL_LABEL)),
+        CheckResult(
+            (
+                "launch agent loaded"
+                if paths.host_platform == "darwin"
+                else "user service enabled or active"
+            ),
+            ok=launchd.is_loaded(),
+        ),
         _remote_tunnel_check(api=api, manager=manifest.manager),
         _organization_check(api=api, manager=manifest.manager),
         *_tunnel_configuration_checks(
@@ -630,7 +640,7 @@ def _live_checks(
     *,
     publication: ManagedPublication,
     manager: ManagerConfig,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     ssh: SshProbe,
     cloudflared: Cloudflared,
@@ -719,7 +729,7 @@ def _anonymous_live_check(
 def _authenticated_live_check(
     *,
     publication: ManagedPublication,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     target_url: str,
 ) -> CheckResult:
@@ -866,7 +876,7 @@ def _ssh_origin_check(*, publication: ManagedPublication, ssh: SshProbe) -> Chec
 def _ssh_live_check(
     *,
     publication: ManagedPublication,
-    keychain: Keychain,
+    keychain: SecretStore,
     cloudflared: Cloudflared,
     ssh: SshProbe,
     access_verified: bool,

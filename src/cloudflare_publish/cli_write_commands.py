@@ -356,7 +356,7 @@ def _tunnel_recover_plan(*, runtime: CliRuntime) -> JsonObject:
         "effects": [
             "fetch current remote tunnel token",
             f"rewrite {runtime.paths.tunnel_token_file}",
-            f"reinstall {runtime.paths.canonical_launch_agent_file}",
+            f"reinstall {runtime.paths.service_file}",
             "restart the managed connector",
             "delete every active connector on the shared tunnel",
         ],
@@ -446,7 +446,7 @@ def _publish_effects(
     if target_audience in {"machine", "mixed"}:
         effects.append("sync service token" if has_token else "create service token")
     elif has_token:
-        effects.extend(["delete service token", "delete service-token Keychain secret"])
+        effects.extend(["delete service token", "delete service-token stored secret"])
     else:
         effects.append("no service token")
     effects.extend(

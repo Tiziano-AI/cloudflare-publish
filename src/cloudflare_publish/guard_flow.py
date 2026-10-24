@@ -7,8 +7,8 @@ from cloudflare_publish.cloudflare_contract import OrganizationRef
 from cloudflare_publish.console import Console
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
-from cloudflare_publish.keychain import Keychain
 from cloudflare_publish.models import AppPaths, ManagerConfig, StateManifest
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import replace_manager, write_manifest
 from cloudflare_publish.workflow_support import load_api_token, require_manifest
 
@@ -16,7 +16,7 @@ from cloudflare_publish.workflow_support import load_api_token, require_manifest
 def run_guard_status(
     *,
     paths: AppPaths,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
     api_token: str | None = None,
@@ -67,7 +67,7 @@ def run_guard_status(
 def run_guard_enable(
     *,
     paths: AppPaths,
-    keychain: Keychain,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
     api_token: str | None = None,

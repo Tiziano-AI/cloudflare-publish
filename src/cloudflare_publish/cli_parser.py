@@ -186,7 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
     _ = repair_retire.add_argument("--resource-id", required=True)
     _ = repair_retire.add_argument("--yes", action="store_true")
 
-    service = subparsers.add_parser("service", help="manage local launchd connector lifecycle")
+    service = subparsers.add_parser("service", help="manage the local native user connector")
     service_subparsers = service.add_subparsers(dest="service_command", required=True)
     _ = service_subparsers.add_parser("status")
     _ = service_subparsers.add_parser("start")

@@ -12,9 +12,12 @@ from pathlib import Path
 
 import pytest
 
+from cloudflare_publish import paths as paths_module
+from cloudflare_publish.host_platform import HostPlatform, host_platform
 from cloudflare_publish.json_types import JsonObject, JsonValue, load_json_value, require_object
 from cloudflare_publish.local_secrets import LOCAL_DOTENV_ENV_VAR, SECRET_ENV_KEYS
 from tests.fake_curl_script import curl_script
+from tests.fake_systemd_scripts import loginctl_script, lsof_script, systemctl_script
 from tests.fake_tool_scripts import (
     brew_script,
     cloudflared_script,
@@ -182,8 +185,18 @@ class FakeEnvironment:
 def make_fake_environment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    platform: HostPlatform = "darwin",
 ) -> Iterator[FakeEnvironment]:
-    """Create a hermetic fake HOME and fake binary directory for CLI tests."""
+    """Inject a native platform and isolate every external dependency in temporary HOME."""
+
+    def selected_platform(value: str | None = None) -> HostPlatform:
+        return host_platform(platform if value is None else value)
+
+    monkeypatch.setattr(paths_module, "host_platform", selected_platform)
+    # Resolve macOS /var aliases before Linux private-file validation. Production
+    # rejects symlink components; tests must not weaken that contract for fake HOME.
+    tmp_path = tmp_path.resolve()
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -210,7 +223,17 @@ def make_fake_environment(
     write_executable(bin_dir / "brew", brew_script())
     write_executable(bin_dir / "plutil", plutil_script())
     write_executable(bin_dir / "ssh", ssh_script())
-    yield FakeEnvironment(repo_root=repo_root, home=home, bin_dir=bin_dir, state_file=state_file)
+    write_executable(bin_dir / "systemctl", systemctl_script())
+    write_executable(bin_dir / "loginctl", loginctl_script())
+    write_executable(bin_dir / "lsof", lsof_script())
+    environment = FakeEnvironment(
+        repo_root=repo_root, home=home, bin_dir=bin_dir, state_file=state_file
+    )
+    if platform == "linux":
+        state = environment.tool_state()
+        state["record_native_calls"] = True
+        environment.write_tool_state(state)
+    yield environment
 
 
 def _object_map(value: JsonValue | None) -> JsonObject:

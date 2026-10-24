@@ -3,31 +3,31 @@
 from __future__ import annotations
 
 import shutil
-import sys
 
 from cloudflare_publish.cli_auth import resolve_api_token
 from cloudflare_publish.cloudflare_api import CloudflareApi
 from cloudflare_publish.cloudflared import Cloudflared
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
-from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
-from cloudflare_publish.models import CANONICAL_LABEL, AppPaths, CheckResult
+from cloudflare_publish.models import AppPaths, CheckResult
+from cloudflare_publish.secret_store import SecretStore
 
 
 def run_doctor(
     *,
     paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     explicit_token: str | None,
 ) -> tuple[bool, str, tuple[CheckResult, ...]]:
     """Collect non-mutating install, auth, local-state, and reachability diagnostics."""
 
     checks: list[CheckResult] = [
-        CheckResult("platform is macOS", ok=sys.platform == "darwin", detail=sys.platform),
+        CheckResult("platform is supported", ok=True, detail=paths.host_platform),
+        _native_service_preflight(launchd),
         _which_check("uv"),
         _which_check("cloudflare-publish"),
         _repo_wrapper_check(paths),
@@ -43,11 +43,13 @@ def run_doctor(
             detail=str(paths.tunnel_token_file),
         ),
         CheckResult(
-            "launch agent file exists",
-            ok=paths.canonical_launch_agent_file.exists(),
-            detail=str(paths.canonical_launch_agent_file),
+            "launch agent file exists"
+            if paths.host_platform == "darwin"
+            else "user unit file exists",
+            ok=paths.service_file.exists(),
+            detail=str(paths.service_file),
         ),
-        CheckResult("launch agent loaded", ok=launchd.is_loaded(CANONICAL_LABEL)),
+        _native_service_loaded(launchd),
     ]
     token_resolution = resolve_api_token(
         explicit_token=explicit_token,
@@ -65,6 +67,26 @@ def run_doctor(
         checks.append(_cloudflare_reachability_check(http=http, api_token=token_resolution.token))
     ready = all(result.ok for result in checks)
     return ready, token_resolution.source, tuple(checks)
+
+
+def _native_service_preflight(service: ConnectorService) -> CheckResult:
+    """Diagnose native prerequisites without performing service effects."""
+
+    try:
+        service.preflight()
+    except AppError as error:
+        return CheckResult("native user service prerequisites", ok=False, detail=error.message)
+    return CheckResult("native user service prerequisites", ok=True)
+
+
+def _native_service_loaded(service: ConnectorService) -> CheckResult:
+    """Keep an unavailable or foreign native service an explicit failed check."""
+
+    label = "launch agent loaded" if service.platform == "darwin" else "user unit enabled or active"
+    try:
+        return CheckResult(label, ok=service.is_loaded())
+    except AppError as error:
+        return CheckResult(label, ok=False, detail=error.message)
 
 
 def _which_check(command: str) -> CheckResult:

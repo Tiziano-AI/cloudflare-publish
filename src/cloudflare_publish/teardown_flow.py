@@ -5,13 +5,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 from cloudflare_publish.cloudflare_api import CloudflareApi
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.console import Console
 from cloudflare_publish.errors import AppError
 from cloudflare_publish.http import CurlHttpClient
-from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
-from cloudflare_publish.models import CANONICAL_LABEL, AppPaths, StateManifest
+from cloudflare_publish.models import AppPaths, StateManifest
 from cloudflare_publish.publication_remote import delete_publication_remote
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.transitions import Mutation
 from cloudflare_publish.workflow_support import (
     load_api_token,
@@ -23,8 +23,8 @@ from cloudflare_publish.workflow_support import (
 def run_teardown(
     *,
     paths: AppPaths,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     http: CurlHttpClient,
     console: Console,
     api_token: str | None = None,
@@ -67,20 +67,23 @@ def run_teardown(
         mutation.save(pending=replace(mutation.pending, phase="cleanup_complete"))
     # This phase can resume without the API credential: every remote resource is gone.
     keychain.delete_secret(account=mutation.manifest.manager.api_token_keychain_account)
+    launchd.remove_definition()
     remove_local_manager_artifacts(paths)
     console.note("Manager state removed.")
     # The result must not advertise an unfinished operation after successful retirement.
     return replace(mutation.manifest, pending=None)
 
 
-def _delete_serving_tunnel(*, mutation: Mutation, api: CloudflareApi, launchd: Launchd) -> None:
+def _delete_serving_tunnel(
+    *, mutation: Mutation, api: CloudflareApi, launchd: ConnectorService
+) -> None:
     """Keep Access intact until the exact tunnel is positively observed deleted."""
 
     manager = mutation.manifest.manager
     mutation.save(pending=replace(mutation.pending, phase="deleting"))
-    if launchd.is_registered(CANONICAL_LABEL):
-        launchd.bootout(CANONICAL_LABEL)
-    launchd.wait_until_unregistered(CANONICAL_LABEL)
+    if launchd.is_registered():
+        launchd.stop()
+    launchd.wait_until_stopped()
     if not api.tunnel_is_deleted(account_id=manager.account_id, tunnel_id=manager.tunnel_id):
         clients = api.list_tunnel_connections(
             account_id=manager.account_id,

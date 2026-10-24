@@ -2,7 +2,34 @@
 
 from __future__ import annotations
 
-FAKE_CURL_PUBLIC_PART = """port = parsed.port or (443 if parsed.scheme == "https" else 80)
+FAKE_CURL_PUBLIC_PART = """if parsed.hostname == "127.0.0.1" and parsed.port == 20241:
+    if not state.get("systemd_active"):
+        write_response(503, "connector inactive")
+    cf = state["cloudflare"]
+    connector_id = state.get("native_connector_id")
+    snapshots = [
+        (tunnel_id, client)
+        for tunnel_id, clients in cf.get("tunnel_connections", {}).items()
+        for client in clients if client["id"] == connector_id
+    ]
+    if len(snapshots) != 1:
+        write_response(503, "connector identity unavailable")
+    tunnel_id, client = snapshots[0]
+    if parsed.path == "/ready":
+        write_response(200, {"status": 200, "readyConnections": 1, "connectorId": connector_id})
+    if parsed.path == "/diag/tunnel":
+        write_response(200, {
+            "tunnelID": tunnel_id, "connectorID": connector_id,
+            "connections": [{"isConnected": True}],
+        })
+    if parsed.path == "/config":
+        write_response(200, {
+            "version": client["config_version"],
+            "config": cf["tunnel_configurations"][tunnel_id]["config"],
+        })
+    write_response(404, "unknown connector endpoint")
+
+port = parsed.port or (443 if parsed.scheme == "https" else 80)
 actual_host = parsed.hostname
 if actual_host is not None:
     connect_target = connect_to.get((actual_host, str(port)))

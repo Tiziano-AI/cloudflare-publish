@@ -139,7 +139,7 @@ def status_matches_range(spec: str, status_code: int) -> bool:
 
 
 def service_token_keychain_account(name: str) -> str:
-    """Return the canonical Keychain account name for one publication token."""
+    """Return the canonical opaque store account for one publication token."""
 
     return f"service-token:{name}"
 

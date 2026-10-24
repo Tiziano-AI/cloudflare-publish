@@ -7,26 +7,39 @@ import shutil
 from pathlib import Path
 
 from cloudflare_publish.cloudflared import Cloudflared
+from cloudflare_publish.connector_service import ConnectorService
 from cloudflare_publish.console import Console
 from cloudflare_publish.errors import AppError
-from cloudflare_publish.keychain import Keychain
-from cloudflare_publish.launchd import Launchd
 from cloudflare_publish.local_secrets import local_secret_env_value
-from cloudflare_publish.models import CANONICAL_LABEL, AppPaths, StateManifest
-from cloudflare_publish.render import render_launch_agent_plist
+from cloudflare_publish.models import AppPaths, StateManifest
+from cloudflare_publish.private_files import (
+    ensure_private_directory,
+    private_directory_available,
+    write_private_file,
+)
+from cloudflare_publish.secret_store import SecretStore
 from cloudflare_publish.state import load_manifest
 
 
 def ensure_platform_tools(
     *,
     cloudflared: Cloudflared,
-    launchd: Launchd,
-    keychain: Keychain,
+    launchd: ConnectorService,
+    keychain: SecretStore,
     install_deps: bool,
 ) -> None:
     """Require the local external-tool baseline."""
 
+    launchd.preflight()
     if cloudflared.binary() is None:
+        if launchd.platform == "linux":
+            raise AppError(
+                "cloudflared is not installed.",
+                hints=(
+                    "Install cloudflared from Cloudflare's official Linux packages; "
+                    + "--install-deps is macOS-only.",
+                ),
+            )
         if not install_deps:
             raise AppError(
                 "cloudflared is not installed.",
@@ -36,18 +49,23 @@ def ensure_platform_tools(
             raise AppError("Homebrew is required for --install-deps.")
         _ = launchd.run(["brew", "install", "cloudflared"])
     _ = cloudflared.require_token_file_support()
-    for program in ("curl", "launchctl", "plutil"):
+    for program in ("curl",):
         if launchd.which(program) is None:
             raise AppError(f"Required tool {program!r} is not available on PATH.")
     if not keychain.binary_available():
-        raise AppError("The macOS `security` CLI is required but not available on PATH.")
+        raise AppError("The platform secret store is unavailable.")
 
 
 def ensure_manager_directories(paths: AppPaths) -> None:
     """Create the manager-owned local directories."""
 
+    if paths.host_platform == "linux":
+        for directory in (paths.state_dir, paths.backups_dir, paths.logs_dir):
+            ensure_private_directory(directory)
+        paths.service_dir.mkdir(parents=True, exist_ok=True)
+        return
     for directory in (
-        paths.launch_agents_dir,
+        paths.service_dir,
         paths.state_dir,
         paths.backups_dir,
         paths.logs_dir,
@@ -55,30 +73,36 @@ def ensure_manager_directories(paths: AppPaths) -> None:
         directory.mkdir(parents=True, exist_ok=True)
 
 
-def install_launch_agent(
+def install_connector_service(
     *,
-    paths: AppPaths,
     cloudflared: Cloudflared,
-    launchd: Launchd,
+    launchd: ConnectorService,
 ) -> None:
-    """Render, validate, and load the canonical user launch agent."""
+    """Render, validate, and load the native canonical user connector."""
 
     binary = cloudflared.binary()
     if binary is None:
         raise AppError("cloudflared is not installed.")
-    plist_text = render_launch_agent_plist(paths, str(binary))
-    _ = paths.canonical_launch_agent_file.write_text(plist_text, encoding="utf-8")
-    launchd.validate_plist(paths.canonical_launch_agent_file)
-    if launchd.is_loaded(CANONICAL_LABEL):
-        launchd.bootout(CANONICAL_LABEL)
-        launchd.wait_until_unregistered(CANONICAL_LABEL)
-    launchd.bootstrap(paths.canonical_launch_agent_file)
-    launchd.kickstart(CANONICAL_LABEL)
+    launchd.install(binary)
 
 
 def write_tunnel_token(paths: AppPaths, token: str) -> None:
     """Persist the tunnel runtime token with strict permissions."""
 
+    if paths.host_platform == "linux":
+        try:
+            value = (token + "\n").encode("ascii")
+        except UnicodeError as error:
+            raise AppError("The tunnel runtime token must be printable ASCII.") from error
+        if not token or any(byte < 33 or byte > 126 for byte in value[:-1]):
+            raise AppError("The tunnel runtime token must be printable ASCII.")
+        write_private_file(
+            paths.tunnel_token_file.parent,
+            paths.tunnel_token_file.name,
+            value,
+            max_bytes=65536,
+        )
+        return
     paths.tunnel_token_file.parent.mkdir(parents=True, exist_ok=True)
     _ = paths.tunnel_token_file.write_text(token + "\n", encoding="utf-8")
     paths.tunnel_token_file.chmod(0o600)
@@ -95,12 +119,12 @@ def require_manifest(paths: AppPaths) -> StateManifest:
 
 def load_api_token(
     *,
-    keychain: Keychain,
+    keychain: SecretStore,
     manifest: StateManifest,
     home: Path,
     explicit_token: str | None = None,
 ) -> str:
-    """Load the manager API token through flag, environment, private dotenv, then Keychain."""
+    """Load the API token through flag, environment, private dotenv, then host storage."""
 
     if explicit_token is not None and explicit_token.strip():
         return explicit_token.strip()
@@ -117,8 +141,11 @@ def load_api_token(
 def remove_local_manager_artifacts(paths: AppPaths) -> None:
     """Remove manager-owned local files without touching backups."""
 
+    if paths.host_platform == "linux":
+        _remove_linux_manager_artifacts(paths)
+        return
     for file_path in (
-        paths.canonical_launch_agent_file,
+        paths.service_file,
         paths.tunnel_token_file,
         paths.stdout_log_file,
         paths.stderr_log_file,
@@ -136,6 +163,25 @@ def remove_local_manager_artifacts(paths: AppPaths) -> None:
             else:
                 child.unlink()
     # Recovery custody remains available until every other local cleanup succeeded.
+    paths.state_file.unlink(missing_ok=True)
+
+
+def _remove_linux_manager_artifacts(paths: AppPaths) -> None:
+    """Retire exact known artifacts, preserving unexplained entries and lock custody."""
+
+    for directory in (paths.state_dir, paths.logs_dir, paths.state_dir / "credentials"):
+        _ = private_directory_available(directory)
+    for file_path in (
+        paths.tunnel_token_file,
+        paths.stdout_log_file,
+        paths.stderr_log_file,
+    ):
+        file_path.unlink(missing_ok=True)
+    for directory in (paths.logs_dir, paths.state_dir / "credentials"):
+        if directory.exists() and not any(directory.iterdir()):
+            directory.rmdir()
+    # The native adapter alone validates and removes the unit definition.
+    # Keep the manifest's recovery state until exact local cleanup has succeeded.
     paths.state_file.unlink(missing_ok=True)
 
 

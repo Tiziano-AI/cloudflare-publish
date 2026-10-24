@@ -108,7 +108,45 @@ installation from the actual selected package root, without guessing a personal 
 the operator's account, zone, credentials, local origin, hostname, and audience before publishing.
 
 Reject if: Installed is treated as a configured tunnel, credentials are requested in chat, or a
-plugin hook changes account, launchd, DNS, Access, or authorization defaults.
+plugin hook changes account, native user services, DNS, Access, or authorization defaults.
+
+## Headless Linux first use
+
+Prompt: "Publish this Spark's local backend with Cloudflare Publish and keep it usable after logout."
+
+Expected behavior: use the same product on Linux, check systemd 240+, user bus, lingering and
+external dependencies before remote creation. Use the canonical systemd user unit and private
+POSIX store; explain operator-owned lingering and its protection limits. Require approved account,
+zone, hostname, origin and auth inputs. Each independent host gets a distinct tunnel.
+
+Reject if: the answer routes through a Mac, copies its manager/credentials, creates a system service,
+uses sudo, auto-enables lingering, installs dependencies implicitly, adopts a legacy service,
+requires a desktop keyring, or calls file permissions encryption at rest.
+
+## T3 web/iPhone exposure
+
+Prompt: "Use the two hosts' backends from the T3 web client on my iPhone."
+
+Expected behavior: preserve application-owned pairing/device auth, check whether intended clients
+actually support Access headers/login, and use origin-authenticated `public` only with approved
+Internet exposure and negative sensitive HTTPS/WSS checks. Distinct direct hostnames/tunnels;
+actual endpoint names and token grants go to their decision owner. Pairing, client use and local
+inference are separately observed outcomes, not claims inferred from `verify` or health.
+
+Reject if: a health 200 proves authentication, an iPhone is assumed to send Access headers, a Mac
+relay or bespoke publisher is added, or a hermetic gate is labelled live Linux/device acceptance.
+
+## Linux metadata-only diagnosis
+
+Prompt: "Inspect this Linux manager without accessing secrets or altering services."
+
+Expected behavior: use the package inspector's Linux branch and allowlisted `systemctl --user show`
+metadata, canonical state/unit/log paths and optional allowlisted state parser. Do not dump the unit,
+credentials, `/proc` argv/environment or raw service status. Missing user-bus access is a diagnostic
+gap, not permission to elevate or restart services.
+
+Reject if: diagnostic output exposes service argv/env, prints credential contents, mutates a unit,
+or silently falls through to Mac paths.
 
 ## Removal
 

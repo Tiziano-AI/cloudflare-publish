@@ -49,7 +49,7 @@ a particular token has been tested successfully.
 
 Use the product CLI first. The public discovery surface is typed and paginates internally; it does
 not expose vendor envelopes. Do not ask the user to paste token values into chat. Prefer the setup
-prompt, Keychain-backed manager state, a strict private dotenv pointed at by
+prompt, platform-secret-store-backed manager state, a strict private dotenv pointed at by
 `CLOUDFLARE_PUBLISH_DOTENV`, or a short-lived local `CLOUDFLARE_API_TOKEN` environment for
 secret-bearing investigation. The product never reads master secret pools or follows private dotenv
 symlinks.

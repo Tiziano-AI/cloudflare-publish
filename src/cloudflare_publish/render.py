@@ -63,6 +63,60 @@ def render_launch_agent_plist(paths: AppPaths, cloudflared_binary: str) -> str:
     )
 
 
+def render_systemd_unit(paths: AppPaths, cloudflared_binary: str) -> str:
+    """Render one systemd 240+ user unit without shell or environment interpolation."""
+
+    binary = _systemd_path(cloudflared_binary)
+    # systemd does not expand environment references in the executable pathname.
+    # Refuse an ambiguous executable instead of changing its meaning via '$$'.
+    if "$" in binary:
+        raise AppError("The cloudflared executable path must not contain a dollar sign.")
+    arguments = " ".join(
+        _systemd_exec_word(value, expand_environment=index != 0)
+        for index, value in enumerate(
+            (binary, "tunnel", "run", "--token-file", str(paths.tunnel_token_file))
+        )
+    )
+    stdout = _systemd_path(str(paths.stdout_log_file)).replace("%", "%%")
+    stderr = _systemd_path(str(paths.stderr_log_file)).replace("%", "%%")
+    # StandardOutput's append: parser accepts the entire raw path, not shell
+    # quoting or C unescaping. Only unit specifiers are expanded there.
+    return (
+        "# Managed by cloudflare-publish; edit through setup only.\n"
+        "[Unit]\nDescription=Cloudflare Publish connector\n\n"
+        "[Service]\nType=simple\n"
+        f"ExecStart={arguments}\n"
+        "Restart=on-failure\nRestartSec=5\nUMask=0077\nNoNewPrivileges=yes\n"
+        f"StandardOutput=append:{stdout}\nStandardError=append:{stderr}\n\n"
+        "[Install]\nWantedBy=default.target\n"
+    )
+
+
+def _systemd_path(value: str) -> str:
+    """Reject nonabsolute or line/control-injecting native paths."""
+
+    from pathlib import Path
+
+    if (
+        not Path(value).is_absolute()
+        or ".." in Path(value).parts
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+        or any(character in value for character in ";{}")
+        or value != value.strip()
+    ):
+        raise AppError("Native service paths must be absolute, printable, unambiguous paths.")
+    return value
+
+
+def _systemd_exec_word(value: str, *, expand_environment: bool) -> str:
+    """Quote one ExecStart word, then escape systemd's distinct expansions."""
+
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
+    if expand_environment:
+        escaped = escaped.replace("$", "$$")
+    return f'"{escaped}"'
+
+
 def build_tunnel_configuration(
     publications: dict[str, ManagedPublication], *, auth_domain: str | None = None
 ) -> JsonObject:
