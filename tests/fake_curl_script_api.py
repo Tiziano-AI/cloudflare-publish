@@ -239,7 +239,8 @@ if parsed.netloc == "api.cloudflare.com":
 
     if "/cfd_tunnel/" in path and path.endswith("/token") and method == "GET":
         tunnel_id = path.split("/cfd_tunnel/")[1].split("/")[0]
-        write_response(200, api_success(f"token-{tunnel_id}"))
+        token = cloudflare.get("tunnel_tokens", {}).get(tunnel_id, f"token-{tunnel_id}")
+        write_response(200, api_success(token))
 
     if "/cfd_tunnel/" in path and path.endswith("/connections") and method == "DELETE":
         tunnel_id = path.split("/cfd_tunnel/")[1].split("/")[0]

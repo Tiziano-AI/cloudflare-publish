@@ -605,6 +605,12 @@ confirmed. If interrupted, resume `teardown --yes`; do not delete the custody fi
 over it. Setup/start refuse incomplete retirement. On macOS, stop retains its existing
 `launchctl bootout` behavior.
 
+Linux refresh/recovery also stops the old process before reinstalling. Its exact definition stays
+in `.cloudflare-publish.service.replacing` until native absence is confirmed, before the new
+definition is loaded and started with the current token and executable. If interrupted, resume
+the original setup/refresh or tunnel-recovery command; generic service controls refuse incomplete
+replacement. Do not delete custody. Reloading or enabling an already-active unit is not a restart.
+
 Use `setup` when the native service file or tunnel token file is missing or stale. Use `verify` when
 the question is whether local state and Cloudflare remote state still match.
 

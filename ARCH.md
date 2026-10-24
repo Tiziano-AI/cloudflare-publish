@@ -27,6 +27,13 @@ native not-found/inactive/disabled/PID-zero evidence before deleting that custod
 interrupted reload/removal resumes through `teardown --yes`, validating retained bytes and cached
 native ownership before retrying. Setup/start refuse incomplete retirement; missing unit bytes
 without custody never authorize deletion or adoption of a cached foreign definition.
+Reinstallation also stops and disables the old connector before replacing its process. It retains
+the exact old definition in `.cloudflare-publish.service.replacing` until reload and native absence
+are confirmed, then writes, reloads and starts the new definition. This absence barrier prevents a
+new on-disk executable from being confused with an old cached native definition. Interrupted
+replacement resumes through the original setup/refresh or tunnel-recovery command; generic service
+controls refuse incomplete replacement. Neither daemon-reload nor enabling an active unit counts
+as restarting its existing process or loading a refreshed runtime token.
 The systemd user manager must already be usable; unattended operation across logout/reboot also
 requires the operator to arrange user lingering. Setup diagnoses this before creating remote
 resources. It never invokes sudo, enables lingering, installs system packages on Linux, or
@@ -450,8 +457,9 @@ foreign definitions. Use `setup` for manager refresh and `verify` for remote con
 Launch-agent reinstall paths call `launchctl bootout`, wait boundedly for launchd to unregister the
 old job, then call `launchctl bootstrap`. This keeps refresh and recovery from racing launchd cleanup
 and surfacing misleading bootstrap errors while the previous connector is still being removed.
-Linux reinstall instead validates ownership, disables/stops the old owned unit, atomically writes
-the canonical unit, reloads the user manager, then enables/starts it. A stopped disabled unit can
+Linux reinstall instead validates ownership, disables/stops the old owned unit, retains its exact
+definition while reloading and confirming native absence, then atomically writes the canonical
+replacement, reloads the user manager, and enables/starts it. A stopped disabled unit can
 remain loaded by systemd without being an active or automatically restarting connector.
 
 ## Cloudflare Token Contract

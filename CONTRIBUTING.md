@@ -222,6 +222,12 @@ operator-approved account, hostname, and credentials, then:
   Mac relay, copied manager, or system-level takeover
 - exercise native start/status/restart/stop and observed enablement/inactivity; verify persistence
   across an operator-controlled logout/reboot, then restore the intended running state
+- exercise setup refresh and tunnel recovery with an already-running connector and changed
+  token/binary inputs; confirm the old PID is gone and the new process actually uses the intended
+  executable and token, without exposing credentials. `daemon-reload` or `enable --now` alone is
+  not process replacement. Interrupt replacement, preserve its exact `.replacing` definition, and
+  resume through the original command; foreign definitions and generic service controls must
+  remain fenced until replacement is complete
 - inspect current-UID directory/file permissions and no-follow secret handling without printing
   credentials; test an interrupted transition and recover through its existing pending operation
 - verify configuration-application evidence is tied to the current user-service PID and exact owned

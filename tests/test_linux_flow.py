@@ -6,6 +6,7 @@ logout/reboot, HTTPS/WSS, JWT or DGX readiness.
 
 from __future__ import annotations
 
+import os
 import stat
 from collections.abc import Iterator
 from pathlib import Path
@@ -163,6 +164,98 @@ def test_linux_origin_authenticated_public_route_owns_no_access_resources(
     for key in ("access_apps", "access_policies", "service_tokens"):
         assert _cloudflare(env)[key] == {}
     assert len(tuple((_paths(env).state_dir / "credentials").iterdir())) == 1
+
+
+@pytest.mark.parametrize("operation", ["refresh", "recover"])
+def test_linux_reinstall_replaces_running_connector_with_current_token_and_binary(
+    linux_environment: FakeEnvironment, operation: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reloading/enabling an active unit is not replacement of its existing process."""
+
+    env = linux_environment
+    assert _setup(env) == 0
+    old_pid, new_binary = _rotate_connector_inputs(env, monkeypatch)
+
+    if operation == "refresh":
+        assert _setup(env, "--refresh-only") == 0
+        assert _manifest(env).pending is None
+    else:
+        assert _run(env, "tunnel", "recover", "apply", "--yes") == 0
+        assert env.cleaned_tunnel_ids() == ("tunnel-1",)
+
+    after = env.tool_state()
+    assert after["systemd_pid"] != old_pid
+    assert after["systemd_start_count"] == 2
+    assert after["systemd_running_token"] == "rotated-runtime-token"
+    assert str(new_binary) in str(after["systemd_running_definition"])
+    assert str(env.bin_dir / "cloudflared") not in str(after["systemd_running_definition"])
+    assert after["systemd_active"] is True and after["systemd_enabled"] is True
+
+
+@pytest.mark.parametrize("operation", ["refresh", "recover"])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "systemd_fail_disable_once",
+        "systemd_refuse_inactive",
+        "systemd_fail_reload_once",
+        "systemd_fail_start_once",
+    ],
+)
+def test_linux_reinstall_failure_preserves_owned_retry_and_does_not_claim_success(
+    linux_environment: FakeEnvironment,
+    operation: str,
+    failure: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stop, reload and start failures cannot silently retain the old active process."""
+
+    env = linux_environment
+    assert _setup(env) == 0
+    old_pid, new_binary = _rotate_connector_inputs(env, monkeypatch)
+    paths = _paths(env)
+    old_definition = paths.service_file.read_bytes()
+    state = env.tool_state()
+    state[failure] = True
+    env.write_tool_state(state)
+
+    def reinstall() -> int:
+        if operation == "refresh":
+            return _setup(env, "--refresh-only")
+        return _run(env, "tunnel", "recover", "apply", "--yes")
+
+    assert reinstall() == 1
+    after_failure = env.tool_state()
+    assert after_failure["systemd_start_count"] == 1
+    assert env.cleaned_tunnel_ids() == ()
+    assert paths.state_file.exists() and paths.tunnel_token_file.exists()
+    if operation == "refresh":
+        pending = _manifest(env).pending
+        assert pending is not None and pending.kind == "setup_refresh"
+    replacing = paths.service_file.with_name(".cloudflare-publish.service.replacing")
+    if failure in {"systemd_fail_disable_once", "systemd_refuse_inactive"}:
+        assert paths.service_file.read_bytes() == old_definition
+        assert not replacing.exists()
+        assert after_failure["systemd_pid"] == old_pid
+    else:
+        assert after_failure["systemd_active"] is False
+    if failure == "systemd_fail_reload_once":
+        assert replacing.read_bytes() == old_definition
+        assert not paths.service_file.exists()
+
+    state = env.tool_state()
+    state[failure] = False
+    env.write_tool_state(state)
+    assert reinstall() == 0
+    after = env.tool_state()
+    assert after["systemd_pid"] != old_pid
+    assert after["systemd_start_count"] == 2
+    assert after["systemd_running_token"] == "rotated-runtime-token"
+    assert str(new_binary) in str(after["systemd_running_definition"])
+    assert after["systemd_active"] is True and after["systemd_enabled"] is True
+    assert not replacing.exists()
+    assert len(_object(_cloudflare(env)["tunnels"])) == 1
+    assert _manifest(env).pending is None
 
 
 def test_linux_publication_lost_response_requires_exact_recovery_without_duplicate_post(
@@ -357,6 +450,24 @@ def test_linux_teardown_unit_removal_reload_failure_resumes_without_remote_write
 
 def _paths(env: FakeEnvironment) -> AppPaths:
     return build_paths(env.repo_root, env.home, platform="linux")
+
+
+def _rotate_connector_inputs(
+    env: FakeEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> tuple[JsonValue, Path]:
+    """Choose new fake runtime credentials and an independently selected binary path."""
+
+    state = env.tool_state()
+    old_pid = state["systemd_pid"]
+    assert state["systemd_running_token"] == "token-tunnel-1"
+    new_binary_dir = env.bin_dir / "upgraded"
+    new_binary_dir.mkdir()
+    new_binary = new_binary_dir / "cloudflared"
+    (env.bin_dir / "cloudflared").rename(new_binary)
+    monkeypatch.setenv("PATH", str(new_binary_dir) + os.pathsep + os.environ["PATH"])
+    _object(state["cloudflare"])["tunnel_tokens"] = {"tunnel-1": "rotated-runtime-token"}
+    env.write_tool_state(state)
+    return old_pid, new_binary
 
 
 def _manifest(env: FakeEnvironment) -> StateManifest:

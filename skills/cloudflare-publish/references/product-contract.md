@@ -62,7 +62,11 @@ restrictive umask and private append logs. Start enables the unit; stop disables
 inactivity. Teardown retains its exact owned unit at
 `~/.config/systemd/user/.cloudflare-publish.service.retiring` until reload and native absence are
 confirmed; an interruption resumes with `teardown --yes`, not by deleting custody or running setup.
-Setup/start refuse incomplete retirement. It never invokes
+Setup/start refuse incomplete retirement. Refresh/recovery stops the old connector and retains its
+exact definition in `.cloudflare-publish.service.replacing` until native absence is confirmed,
+before writing/reloading/starting the replacement. Resume the original setup/refresh or
+tunnel-recovery command after interruption; generic service controls refuse incomplete replacement.
+Reload or `enable --now` of an active unit does not replace its process or loaded token. It never invokes
 sudo, enables lingering, installs Linux packages, creates system services, or adopts legacy
 ownership. `--install-deps` and confirmed legacy takeover remain macOS-only. Every independent
 host/profile creates a distinct tunnel; do not copy another host's state or credentials.

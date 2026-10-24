@@ -159,6 +159,11 @@ the uncertain secret; it does not retrieve the old one.
   refuses foreign configuration drift rather than overwriting it. It cannot change account,
   zone, or tunnel identity.
 - Refresh and tunnel recovery reinstall the native service only after confirmed stop settlement.
+  Linux retains the exact old definition in `.cloudflare-publish.service.replacing` until native
+  reload and absence are confirmed, then writes/reloads/starts the new one. Resume the original
+  setup/refresh or tunnel-recovery command if interrupted; generic service controls refuse
+  incomplete replacement. Do not delete that custody or treat `enable --now` as restarting an
+  already-running connector with a new token or binary.
   On macOS, do not re-run takeover after the known generic-service conflict has already been removed.
 - Use `tunnel recover plan` after dashboard token rotation or shared-tunnel compromise, then the
   separately authorized `tunnel recover apply --yes`; it disconnects every shared-tunnel connector.

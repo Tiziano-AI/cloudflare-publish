@@ -90,6 +90,9 @@ class Systemd:
                 code="platform_not_ready",
             )
         self._require_private_existing_state()
+        if self._replacement_pending():
+            _ = self._validate_definition_removal(self._replacement_file)
+            return
         if self._paths.service_file.exists() or self._paths.service_file.is_symlink():
             _ = self._file_binary()
             self._validate_effective(self._show(), allow_missing=True, allow_reload=True)
@@ -100,6 +103,7 @@ class Systemd:
         """Report only the verified enabled or active canonical connector."""
 
         self._require_no_retirement()
+        self._require_no_replacement()
         values = self._show()
         if (
             values["LoadState"] == "not-found"
@@ -136,17 +140,43 @@ class Systemd:
         return () if result.stdout.strip() == "LoadState=not-found" else ("cloudflared.service",)
 
     def validate_definition(self) -> Path:
+        self._require_no_replacement()
         binary = self._file_binary()
         self._validate_effective(self._show(), binary=binary)
         return binary
 
     def install(self, binary: Path) -> None:
-        """Install only into an absent or already canonical unit, then native-load it."""
+        """Stop the owned process and clear native old-config custody before replacement."""
 
         self.preflight()
         definition = render_systemd_unit(self._paths, str(binary))
         self._paths.service_dir.mkdir(parents=True, exist_ok=True)
         self._require_service_directory()
+        if self._replacement_pending():
+            self._finish_definition_removal(self._replacement_file)
+        elif self._paths.service_file.exists():
+            previous_binary = self._file_binary()
+            values = self._show()
+            self._validate_effective(
+                values, binary=previous_binary, allow_missing=True, allow_reload=True
+            )
+            if values["LoadState"] != "not-found":
+                self._ctl("disable", "--now", UNIT)
+                values = self._show()
+                self._validate_effective(values, binary=previous_binary, allow_reload=True)
+                if self._serving(values):
+                    raise AppError("The connector is still active or enabled after native stop.")
+                _ = self._paths.service_file.replace(self._replacement_file)
+                self._finish_definition_removal(self._replacement_file)
+        self._write_definition(definition)
+        self._ctl("daemon-reload")
+        _ = self.validate_definition()
+        self._ctl("enable", "--now", UNIT)
+        self._require_running()
+
+    def _write_definition(self, definition: str) -> None:
+        """Atomically install the desired unit after native absence is established."""
+
         descriptor, temporary = tempfile.mkstemp(
             prefix=".cloudflare-publish-", dir=self._paths.service_dir
         )
@@ -160,21 +190,27 @@ class Systemd:
             _ = staged.replace(self._paths.service_file)
         finally:
             staged.unlink(missing_ok=True)
-        self._ctl("daemon-reload")
-        _ = self.validate_definition()
-        self.start()
 
     def start(self) -> None:
+        self._require_no_replacement()
         self.preflight()
         _ = self.validate_definition()
         self._ctl("enable", "--now", UNIT)
-        if not self.is_loaded():
-            raise AppError("The connector did not become enabled or active after start.")
+        self._require_running()
+
+    def _require_running(self) -> None:
+        """An enabled unit is not proof that the desired process actually started."""
+
+        values = self._show()
+        self._validate_effective(values, binary=self._file_binary())
+        if values["ActiveState"] != "active" or _integer(values, "MainPID") <= 0:
+            raise AppError("The native connector did not become a running process.")
 
     def stop(self) -> None:
         """Disable automatic startup and stop, retaining the canonical definition."""
 
         self._require_no_retirement()
+        self._require_no_replacement()
         if not self._paths.service_file.exists() and not self._paths.service_file.is_symlink():
             self._require_service_directory()
             values = self._show()
@@ -185,13 +221,13 @@ class Systemd:
         self.wait_until_stopped()
 
     def restart(self) -> None:
+        self._require_no_replacement()
         self.preflight()
         _ = self.validate_definition()
         if not self.is_loaded():
             raise AppError("Connector is not enabled or active. Run service start first.")
         self._ctl("restart", UNIT)
-        if not self.is_loaded():
-            raise AppError("The connector is not enabled or active after restart.")
+        self._require_running()
 
     def wait_until_stopped(self) -> None:
         if self.is_registered():
@@ -202,14 +238,31 @@ class Systemd:
     def remove_definition(self) -> None:
         """Remove the owned inactive unit and reload; never delete foreign definitions."""
 
+        self._require_no_replacement()
         if self._retirement_file.exists() or self._retirement_file.is_symlink():
-            self._finish_definition_retirement()
+            self._finish_definition_removal(self._retirement_file)
             return
         self.wait_until_stopped()
         if self._paths.service_file.exists() or self._paths.service_file.is_symlink():
             _ = self.validate_definition()
             _ = self._paths.service_file.replace(self._retirement_file)
-            self._finish_definition_retirement()
+            self._finish_definition_removal(self._retirement_file)
+
+    @property
+    def _replacement_file(self) -> Path:
+        """Retain old bytes only until the user manager forgets the old definition."""
+
+        return self._paths.service_file.with_name(".cloudflare-publish.service.replacing")
+
+    def _replacement_pending(self) -> bool:
+        return self._replacement_file.exists() or self._replacement_file.is_symlink()
+
+    def _require_no_replacement(self) -> None:
+        if self._replacement_pending():
+            raise AppError(
+                "Connector unit replacement is incomplete; resume setup or tunnel recovery.",
+                code="service_replacement_pending",
+            )
 
     @property
     def _retirement_file(self) -> Path:
@@ -224,20 +277,26 @@ class Systemd:
                 code="service_retirement_pending",
             )
 
-    def _finish_definition_retirement(self) -> None:
+    def _validate_definition_removal(self, custody: Path) -> Path:
+        """Validate stopped old-definition custody without performing native effects."""
+
         if self._paths.service_file.exists() or self._paths.service_file.is_symlink():
             raise _foreign()
-        binary = self._file_binary(self._retirement_file)
+        binary = self._file_binary(custody)
         values = self._show()
         self._validate_effective(values, binary=binary, allow_missing=True, allow_reload=True)
         if self._serving(values):
-            raise AppError("The retiring connector is still active or enabled.")
+            raise AppError("The retained connector definition is still active or enabled.")
+        return binary
+
+    def _finish_definition_removal(self, custody: Path) -> None:
+        binary = self._validate_definition_removal(custody)
         self._ctl("daemon-reload")
         values = self._show()
         self._validate_effective(values, binary=binary, allow_missing=True)
         if values["LoadState"] != "not-found" or self._serving(values):
             raise AppError("The user manager has not confirmed connector unit removal.")
-        self._retirement_file.unlink()
+        custody.unlink()
 
     def _ctl(self, *arguments: str) -> None:
         _ = self.run(["systemctl", "--user", *arguments])

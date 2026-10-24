@@ -32,6 +32,14 @@ def disconnect():
         ]
 
 def connect():
+    # Starting an inactive service captures the executable and token then in use.
+    # daemon-reload and enable --now do not change an already-running process.
+    generation = state.get("systemd_start_count", 0) + 1
+    state["systemd_start_count"] = generation
+    state["systemd_pid"] = 1233 + generation
+    state["systemd_running_definition"] = state["systemd_loaded_definition"]
+    token_path = Path.home() / ".local/state/cloudflare-publish/tunnel-token.txt"
+    state["systemd_running_token"] = token_path.read_text(encoding="utf-8").strip()
     state["systemd_enabled"] = True
     state["systemd_active"] = True
     state["native_connector_id"] = connector_id
@@ -60,7 +68,7 @@ def properties():
     values = {
         "LoadState": "loaded" if loaded else "not-found",
         "ActiveState": "active" if state.get("systemd_active") else "inactive",
-        "MainPID": "1234" if state.get("systemd_active") else "0",
+        "MainPID": str(state["systemd_pid"]) if state.get("systemd_active") else "0",
         "ExecMainStatus": "0",
         "FragmentPath": str(unit_path) if loaded else "",
         "DropInPaths": "",
@@ -104,7 +112,19 @@ if args == ["--user", "daemon-reload"]:
         state.pop("systemd_loaded_definition", None)
     save()
     raise SystemExit(0)
-if args in (["--user", "enable", "--now", unit], ["--user", "restart", unit]):
+if args == ["--user", "enable", "--now", unit]:
+    state["systemd_enabled"] = True
+    if state.get("systemd_fail_start_once"):
+        state["systemd_fail_start_once"] = False
+        save()
+        sys.stderr.write("start refused\n")
+        raise SystemExit(1)
+    if not state.get("systemd_active"):
+        connect()
+    save()
+    raise SystemExit(0)
+if args == ["--user", "restart", unit]:
+    disconnect()
     connect()
     save()
     raise SystemExit(0)
@@ -161,9 +181,10 @@ state = json.loads(path.read_text(encoding="utf-8"))
 args = sys.argv[1:]
 state.setdefault("lsof_calls", []).append(args)
 path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
-expected = ["-nP", "-a", "-p", "1234", "-iTCP", "-sTCP:LISTEN", "-Fpn"]
+pid = str(state.get("systemd_pid", 0))
+expected = ["-nP", "-a", "-p", pid, "-iTCP", "-sTCP:LISTEN", "-Fpn"]
 if args == expected and state.get("systemd_active"):
-    print("p1234\nf7\nn127.0.0.1:20241")
+    print("p" + pid + "\nf7\nn127.0.0.1:20241")
     raise SystemExit(0)
 raise SystemExit(1)
 """

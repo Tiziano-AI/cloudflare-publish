@@ -221,6 +221,10 @@ Overlay Contract owns this boundary.
 - Linux unit retirement retains `.cloudflare-publish.service.retiring` beside the unit until native
   reload and absence are confirmed. Resume `teardown --yes`; never delete custody or run setup
   over it. Exact local cleanup preserves unknown entries and the persistent writer lock.
+- Linux reinstall stops the old process and retains `.cloudflare-publish.service.replacing` until
+  native absence is confirmed, before loading/starting the new definition. Resume the original
+  setup/refresh or tunnel-recovery command after interruption; generic service controls refuse
+  incomplete replacement. Never count `enable --now` of an active unit as a process restart.
 - `setup` refresh repairs tunnel-token-file and native user-service drift. It accepts only the exact
   owned guarded configuration or its exact legacy guard-stripped form; foreign config drift is
   not overwritten. It cannot change the manager's account, zone or tunnel identity.
