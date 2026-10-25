@@ -151,6 +151,12 @@ the uncertain secret; it does not retrieve the old one.
 
 ## Choose the repair owner
 
+- `service_directory_unsafe` is a Linux host prerequisite, not proof of a foreign connector. Its
+  message and JSON `data` name the unsafe ancestor, octal mode and reason. Ask the host operator
+  to inspect that exact path and resolve its permissions/ownership under host policy; the CLI
+  never changes existing directory modes. A `0775` ancestor is not admitted merely because the
+  current user belongs to its group. Foreign unit/override/executable drift remains a separate
+  `service_ownership_conflict`; do not use takeover, overwrite units or delete custody for either.
 - Use `service status` before local connector control; `service start`, `stop`, and `restart`
   operate only the native user service, not routing or credential reconciliation. Linux start
   enables the unit; stop disables it and confirms inactivity. Teardown removes only its owned unit.

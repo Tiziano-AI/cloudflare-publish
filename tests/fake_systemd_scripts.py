@@ -72,7 +72,9 @@ def properties():
         "ExecMainStatus": "0",
         "FragmentPath": str(unit_path) if loaded else "",
         "DropInPaths": "",
-        "UnitFileState": "enabled" if state.get("systemd_enabled") else "disabled",
+        "UnitFileState": (
+            "enabled" if state.get("systemd_enabled") else "disabled" if loaded else ""
+        ),
         "ExecStart": (
             "{ path=" + binary + " ; argv[]=" + " ".join(arguments)
             + " ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0"
@@ -80,6 +82,9 @@ def properties():
         ) if loaded else "",
         "NeedDaemonReload": "yes" if loaded and current != definition else "no",
     }
+    if not loaded:
+        # Captured systemd 255 output omits ExecStart for absent units.
+        del values["ExecStart"]
     values.update(state.get("systemd_property_overrides", {}))
     return values
 

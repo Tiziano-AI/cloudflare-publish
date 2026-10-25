@@ -520,6 +520,16 @@ user under host policy; the product does not elevate privileges or enable it. A 
 a working user manager is not a supported substitute. Setup diagnoses these prerequisites before
 creating remote resources.
 
+The canonical `~/.config/systemd/user/` directory and its existing ancestors must be real
+current-user/root-owned directories without group/other write access, except root-owned sticky
+ancestors. `service_directory_unsafe` names the exact unsafe path, octal mode and reason; JSON
+also retains those fields in `data`. Have the host operator inspect and correct that specific
+prerequisite under host policy, preserving unrelated permissions and ACLs. Setup never changes
+existing directory modes. A foreign unit or override is a separate `service_ownership_conflict`;
+do not overwrite it to resolve a directory prerequisite. An absent unit may legitimately omit
+`ExecStart` from native readback; the CLI accepts only the coherent inactive, PID-zero absent
+shape, not incomplete loaded or conflicting state.
+
 The host initiates outbound connections; no inbound port, public origin IP, or NAT/PAT forwarding
 is required. Arrange DNS through the host's approved resolver and outbound UDP/7844 (QUIC) plus
 TCP/7844 (HTTP/2) to Cloudflare's documented tunnel destinations. Allowing both transports is the

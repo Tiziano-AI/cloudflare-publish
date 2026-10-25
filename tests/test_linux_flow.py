@@ -6,6 +6,7 @@ logout/reboot, HTTPS/WSS, JWT or DGX readiness.
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from collections.abc import Iterator
@@ -74,6 +75,58 @@ def test_linux_rejects_mac_only_setup_effects(
     assert _setup(linux_environment, option, "--yes") == 1
     assert not _cloudflare(linux_environment).get("requests")
     assert linux_environment.tool_state()["brew_calls"] == 0
+
+
+@pytest.mark.parametrize("ancestor", [".config/systemd", ".config/systemd/user"])
+def test_linux_unsafe_service_directory_has_precise_json_and_no_bootstrap_effects(
+    linux_environment: FakeEnvironment, ancestor: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A host permission prerequisite is not misreported as a foreign unit."""
+
+    env = linux_environment
+    directory = env.home / ancestor
+    directory.mkdir(parents=True, exist_ok=True)
+    directory.chmod(0o775)
+    assert (
+        _run(
+            env,
+            "--json",
+            "setup",
+            "--api-token",
+            "linux-api-token",
+            "--account-id",
+            "acc-123",
+            "--zone",
+            "example.com",
+        )
+        == 1
+    )
+    output = capsys.readouterr()
+    envelope = _object(json.loads(output.out))
+    assert envelope["ok"] is False
+    assert envelope["output_class"] == "evidence_error"
+    error = _object(envelope["error"])
+    assert error["code"] == "service_directory_unsafe"
+    assert error["message"] == (
+        f"Unsafe Linux user-service directory: {directory} (mode 0775); "
+        + "group or others can write."
+    )
+    assert envelope["data"] == {
+        "directory": str(directory),
+        "mode": "0775",
+        "reason": "group or others can write",
+    }
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o775
+    paths = _paths(env)
+    assert not paths.state_file.exists()
+    assert not paths.tunnel_token_file.exists()
+    assert not (paths.state_dir / "credentials").exists()
+    assert not paths.service_file.exists()
+    assert not _cloudflare(env).get("requests")
+    assert all(
+        call == ["--version"] or (isinstance(call, list) and "show" in call)
+        for call in _calls(env, "systemctl_calls")
+    )
 
 
 def test_linux_setup_uses_private_host_storage_and_an_owned_user_unit(

@@ -18,6 +18,19 @@ from cloudflare_publish.render import render_systemd_unit
 from cloudflare_publish.systemd import UNIT, Systemd
 from cloudflare_publish.workflow_support import remove_local_manager_artifacts
 
+# Exact property stdout shared by both captured systemd 255 absent-unit observations.
+# No host, environment, user or other private acquisition metadata belongs in this fixture.
+_ABSENT_UNIT_STDOUT = (
+    "MainPID=0\n"
+    "ExecMainStatus=0\n"
+    "LoadState=not-found\n"
+    "ActiveState=inactive\n"
+    "FragmentPath=\n"
+    "DropInPaths=\n"
+    "UnitFileState=\n"
+    "NeedDaemonReload=no\n"
+)
+
 
 class NativeRunner(CommandRunner):
     """Model independent native state and explicit systemctl effects."""
@@ -214,6 +227,259 @@ def test_preflight_fails_without_any_service_mutation(
         for command in runner.commands
     )
     assert not any("enable-linger" in command for command in runner.commands)
+
+
+def test_actual_absent_native_shape_accepts_safe_service_ancestry(
+    native: tuple[AppPaths, NativeRunner, Systemd], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real absent units omit ExecStart entirely, even with all properties requested."""
+
+    paths, runner, service = native
+    directories = [
+        paths.home / name for name in (".config", ".config/systemd", ".config/systemd/user")
+    ]
+    for directory in directories:
+        directory.chmod(0o755)
+    original_observation = runner.observation
+    monkeypatch.setattr(
+        runner,
+        "observation",
+        lambda: original_observation() if runner.loaded else _ABSENT_UNIT_STDOUT,
+    )
+    service.preflight()
+    assert service.service() is None
+    assert not paths.service_file.exists()
+    assert not any(
+        command[2:3] in (["enable"], ["disable"], ["restart"], ["daemon-reload"])
+        for command in runner.commands
+    )
+    service.install(runner.binary)
+    assert runner.active and runner.enabled and runner.pid > 0
+    replacement = Path("/opt/replacement/cloudflared")
+    service.install(replacement)
+    assert runner.active and runner.enabled and runner.running_binary == replacement
+    service.stop()
+    service.remove_definition()
+    assert not runner.loaded and not paths.service_file.exists()
+    assert not paths.service_file.with_name(".cloudflare-publish.service.replacing").exists()
+    assert not paths.service_file.with_name(".cloudflare-publish.service.retiring").exists()
+    assert all(directory.stat().st_mode & 0o777 == 0o755 for directory in directories)
+
+
+@pytest.mark.parametrize("custody", ["replacing", "retiring"])
+def test_real_absent_native_shape_resumes_exact_definition_custody(
+    native: tuple[AppPaths, NativeRunner, Systemd],
+    monkeypatch: pytest.MonkeyPatch,
+    custody: str,
+) -> None:
+    paths, runner, service = native
+    _definition(paths, runner)
+    retained = paths.service_file.with_name(f".cloudflare-publish.service.{custody}")
+    _ = paths.service_file.rename(retained)
+    runner.load_definition()
+    original_observation = runner.observation
+    monkeypatch.setattr(
+        runner,
+        "observation",
+        lambda: original_observation() if runner.loaded else _ABSENT_UNIT_STDOUT,
+    )
+    if custody == "replacing":
+        service.preflight()
+        service.install(Path("/opt/replacement/cloudflared"))
+        assert runner.active and runner.enabled
+        assert runner.running_binary == Path("/opt/replacement/cloudflared")
+    else:
+        service.remove_definition()
+        assert not runner.loaded and not paths.service_file.exists()
+    assert not retained.exists()
+
+
+def test_real_absent_native_shape_accepts_exact_canonical_disk_definition_for_reload_retry(
+    native: tuple[AppPaths, NativeRunner, Systemd], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An interrupted new-file reload can leave owned disk bytes and native absence."""
+
+    paths, runner, service = native
+    _definition(paths, runner)
+    runner.loaded = False
+    runner.loaded_binary = None
+    runner.loaded_definition = None
+    original_observation = runner.observation
+    monkeypatch.setattr(
+        runner,
+        "observation",
+        lambda: original_observation() if runner.loaded else _ABSENT_UNIT_STDOUT,
+    )
+    service.preflight()
+    service.install(runner.binary)
+    assert runner.active and runner.enabled and runner.pid > 0
+
+
+@pytest.mark.parametrize("loaded", [False, True], ids=["absent", "loaded"])
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "MainPID",
+        "ExecMainStatus",
+        "LoadState",
+        "ActiveState",
+        "FragmentPath",
+        "DropInPaths",
+        "UnitFileState",
+        "NeedDaemonReload",
+    ],
+)
+def test_missing_other_native_properties_remain_incomplete(
+    native: tuple[AppPaths, NativeRunner, Systemd],
+    monkeypatch: pytest.MonkeyPatch,
+    missing: str,
+    loaded: bool,
+) -> None:
+    paths, runner, service = native
+    if loaded:
+        _definition(paths, runner)
+    observed = runner.observation() if loaded else _ABSENT_UNIT_STDOUT
+    incomplete = "".join(
+        line + "\n" for line in observed.splitlines() if not line.startswith(missing + "=")
+    )
+    monkeypatch.setattr(runner, "observation", lambda: incomplete)
+    for operation in (service.preflight, lambda: service.install(runner.binary)):
+        with pytest.raises(AppError, match="observation is incomplete"):
+            operation()
+    assert not any(
+        command[2:3] in (["enable"], ["disable"], ["restart"], ["daemon-reload"])
+        for command in runner.commands
+    )
+
+
+@pytest.mark.parametrize("foreign", [False, True], ids=["owned", "foreign"])
+def test_loaded_native_unit_without_execstart_is_never_accepted(
+    native: tuple[AppPaths, NativeRunner, Systemd],
+    monkeypatch: pytest.MonkeyPatch,
+    foreign: bool,
+) -> None:
+    paths, runner, service = native
+    _definition(paths, runner)
+    if foreign:
+        runner.fragment = "/etc/systemd/user/cloudflare-publish.service"
+    observed = "".join(
+        line + "\n"
+        for line in runner.observation().splitlines()
+        if not line.startswith("ExecStart=")
+    )
+    original = paths.service_file.read_bytes()
+    monkeypatch.setattr(runner, "observation", lambda: observed)
+    for operation in (
+        service.preflight,
+        service.service,
+        lambda: service.install(runner.binary),
+        service.remove_definition,
+    ):
+        with pytest.raises(AppError, match="observation is incomplete"):
+            _ = operation()
+    assert paths.service_file.read_bytes() == original
+    assert not any(
+        command[2:3] in (["enable"], ["disable"], ["restart"], ["daemon-reload"])
+        for command in runner.commands
+    )
+
+
+@pytest.mark.parametrize(
+    ("property_name", "value"),
+    [
+        ("LoadState", "loaded"),
+        ("LoadState", "masked"),
+        ("LoadState", "error"),
+        ("ActiveState", "active"),
+        ("ActiveState", "activating"),
+        ("ActiveState", "failed"),
+        ("MainPID", "9216"),
+        ("MainPID", "-1"),
+        ("ExecMainStatus", "1"),
+        ("FragmentPath", "/foreign/definition"),
+        ("DropInPaths", "/foreign/override"),
+        ("UnitFileState", "enabled"),
+        ("UnitFileState", "disabled"),
+        ("NeedDaemonReload", "yes"),
+    ],
+)
+def test_missing_execstart_is_not_normalized_for_unsafe_absent_native_fields(
+    native: tuple[AppPaths, NativeRunner, Systemd],
+    monkeypatch: pytest.MonkeyPatch,
+    property_name: str,
+    value: str,
+) -> None:
+    paths, runner, service = native
+    observed = "".join(
+        f"{property_name}={value}\n" if line.startswith(property_name + "=") else line + "\n"
+        for line in _ABSENT_UNIT_STDOUT.splitlines()
+    )
+    monkeypatch.setattr(runner, "observation", lambda: observed)
+    for operation in (service.preflight, lambda: service.install(runner.binary)):
+        with pytest.raises(AppError):
+            operation()
+    assert not paths.service_file.exists()
+    assert not any(
+        command[2:3] in (["enable"], ["disable"], ["restart"], ["daemon-reload"])
+        for command in runner.commands
+    )
+
+
+@pytest.mark.parametrize("foreign", ["bytes", "symlink", "directory"])
+def test_real_native_absence_does_not_adopt_foreign_canonical_disk_definition(
+    native: tuple[AppPaths, NativeRunner, Systemd],
+    monkeypatch: pytest.MonkeyPatch,
+    foreign: str,
+) -> None:
+    paths, runner, service = native
+    if foreign == "bytes":
+        _ = paths.service_file.write_text("[Service]\nExecStart=/foreign/cloudflared\n")
+    elif foreign == "symlink":
+        paths.service_file.symlink_to(paths.service_file.with_name("unowned.service"))
+    else:
+        paths.service_file.mkdir()
+    monkeypatch.setattr(runner, "observation", lambda: _ABSENT_UNIT_STDOUT)
+    for operation in (service.preflight, lambda: service.install(runner.binary)):
+        with pytest.raises(AppError, match="not the exact owned"):
+            operation()
+    assert paths.service_file.exists() or paths.service_file.is_symlink()
+    assert not any(
+        command[2:3] in (["enable"], ["disable"], ["restart"], ["daemon-reload"])
+        for command in runner.commands
+    )
+
+
+@pytest.mark.parametrize("mode", [0o775, 0o757])
+@pytest.mark.parametrize("parent", [".config", ".config/systemd", ".config/systemd/user"])
+def test_writable_service_ancestry_names_exact_path_and_mode_without_chmod_or_native_effects(
+    native: tuple[AppPaths, NativeRunner, Systemd], parent: str, mode: int
+) -> None:
+    paths, runner, service = native
+    directories = [
+        paths.home / name for name in (".config", ".config/systemd", ".config/systemd/user")
+    ]
+    selected = paths.home / parent
+    selected.chmod(mode)
+    original_modes = {directory: directory.stat().st_mode for directory in directories}
+    assert selected.stat().st_uid == os.getuid()
+    assert selected.stat().st_gid == os.getgid()
+    for operation in (service.preflight, lambda: service.install(runner.binary)):
+        with pytest.raises(AppError) as raised:
+            operation()
+        assert raised.value.code == "service_directory_unsafe"
+        assert str(selected) in raised.value.message
+        assert f"{mode:04o}" in raised.value.message
+        assert raised.value.data == {
+            "directory": str(selected),
+            "mode": f"{mode:04o}",
+            "reason": "group or others can write",
+        }
+    assert {directory: directory.stat().st_mode for directory in directories} == original_modes
+    assert not paths.service_file.exists()
+    assert not any(
+        command[2:3] in (["enable"], ["disable"], ["restart"], ["daemon-reload"])
+        for command in runner.commands
+    )
 
 
 def test_install_start_stop_restart_and_owned_removal(
@@ -567,8 +833,12 @@ def test_unit_parent_drift_blocks_install_and_removal(
         selected.chmod(0o777)
     original = paths.service_file.read_bytes()
     for operation in (lambda: service.install(runner.binary), service.remove_definition):
-        with pytest.raises(AppError, match="not the exact owned"):
+        with pytest.raises(AppError) as raised:
             operation()
+        assert raised.value.code == "service_directory_unsafe"
+        assert str(selected) in raised.value.message
+        if unsafe == "writable":
+            assert "0777" in raised.value.message
     assert paths.service_file.read_bytes() == original
     assert not any("daemon-reload" in command for command in runner.commands)
 

@@ -57,6 +57,13 @@ deploy application code into Cloudflare compute.
     strict-permission temporary files, not argv, and disables user curlrc configuration.
 
 Linux requires systemd 240+, a working user bus and operator-arranged `Linger=yes` before setup.
+The user-service directory and existing ancestors must be real current-user/root-owned directories
+without group/other write access, except root-owned sticky ancestors. `service_directory_unsafe`
+reports the exact directory, four-digit octal mode and reason (also in JSON `data`); only the host
+operator resolves existing permissions. Foreign unit/override/executable drift remains
+`service_ownership_conflict`. Native readback may omit only `ExecStart` for an otherwise complete
+not-found/inactive/PID-zero shape with zero `ExecMainStatus`, empty fragment/drop-ins/unit-file state,
+and no daemon reload needed. That does not waive disk or retained-definition ownership checks.
 It manages only its canonical user unit, using an absolute cloudflared binary, `--token-file`,
 restrictive umask and private append logs. Start enables the unit; stop disables it and confirms
 inactivity. Teardown retains its exact owned unit at

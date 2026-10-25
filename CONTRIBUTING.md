@@ -161,6 +161,10 @@ exercise:
 - distinct per-host tunnel ownership, with no adoption by copied manifests or credentials
 - systemd user-unit serialization/readback, absolute binary/token-file paths, restrictive umask,
   private append logs, enable/start and disable/stop settlement, and exact owned-unit cleanup
+- captured absent-unit stdout with omitted `ExecStart` through first setup and native absence
+  barriers; other missing properties and conflicting/loaded shapes stay fail-closed
+- unsafe user-service ancestry diagnostics with exact path/mode/reason and no permission changes
+  or remote effects; these prerequisites are distinct from foreign-unit ownership conflicts
 - service-token rotation
 - same-request resumption and incompatible-mutation refusal through one typed pending transition
 - lost creation responses, exact-operation resource resolution, complete scoped absence proof,

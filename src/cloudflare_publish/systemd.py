@@ -316,6 +316,20 @@ class Systemd:
             if not separator or key not in _PROPERTIES or key in values:
                 raise AppError("The systemd user-service observation is malformed.")
             values[key] = value
+        # Real systemd user managers may omit ExecStart for an absent unit even
+        # when explicitly requested. Normalize only the complete, coherent absent
+        # shape; all ownership checks still follow.
+        if values == {
+            "LoadState": "not-found",
+            "ActiveState": "inactive",
+            "MainPID": "0",
+            "ExecMainStatus": "0",
+            "FragmentPath": "",
+            "DropInPaths": "",
+            "UnitFileState": "",
+            "NeedDaemonReload": "no",
+        }:
+            values["ExecStart"] = ""
         if set(values) != set(_PROPERTIES):
             raise AppError("The systemd user-service observation is incomplete.")
         return values
@@ -423,13 +437,27 @@ class Systemd:
             if directory.exists() or directory.is_symlink():
                 metadata = directory.lstat()
                 root_sticky = metadata.st_uid == 0 and bool(metadata.st_mode & stat.S_ISVTX)
-                if (
-                    not stat.S_ISDIR(metadata.st_mode)
-                    or metadata.st_uid not in {0, os.getuid()}
-                    or metadata.st_mode & 0o022
-                    and not root_sticky
-                ):
-                    raise _foreign()
+                reason = ""
+                if not stat.S_ISDIR(metadata.st_mode):
+                    reason = "not a real directory"
+                elif metadata.st_uid not in {0, os.getuid()}:
+                    reason = "not owned by the current user or root"
+                elif metadata.st_mode & 0o022 and not root_sticky:
+                    reason = "group or others can write"
+                if reason:
+                    mode = f"{stat.S_IMODE(metadata.st_mode):04o}"
+                    raise AppError(
+                        f"Unsafe Linux user-service directory: {directory} (mode {mode}); "
+                        + f"{reason}.",
+                        hints=(
+                            "Ask the host operator to resolve this directory prerequisite; "
+                            + "the CLI never changes existing directory permissions.",
+                            "Ancestry must use real current-user/root-owned directories without "
+                            + "group/other write access, except root-owned sticky ancestors.",
+                        ),
+                        code="service_directory_unsafe",
+                        data={"directory": str(directory), "mode": mode, "reason": reason},
+                    )
             if directory == directory.parent:
                 return
             directory = directory.parent

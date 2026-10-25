@@ -41,6 +41,19 @@ changes another service. `--install-deps` remains the explicit Homebrew-only mac
 Linux refuses legacy takeover: an operator must explicitly resolve conflicting legacy files or
 services outside this product rather than letting it adopt system-wide ownership.
 
+The user-service directory and every existing ancestor must be real directories owned by the
+current user or root, without group/other write access (root-owned sticky ancestors are exempt
+from the write-bit rule). Unsafe ancestry fails with `service_directory_unsafe`, identifying the
+directory, four-digit octal mode and reason in both the message and JSON `data`. The host operator
+resolves that prerequisite; the CLI never changes existing directory permissions. This is distinct
+from a foreign unit, override or executable, which remains `service_ownership_conflict`.
+Native observation requires every requested property except that systemd may omit `ExecStart`
+for a coherent absent unit: `LoadState=not-found`, `ActiveState=inactive`, zero `MainPID` and
+`ExecMainStatus`, empty `FragmentPath`, `DropInPaths` and `UnitFileState`, and
+`NeedDaemonReload=no`. Only that exact shape normalizes the omitted property to empty. Loaded,
+conflicting or otherwise incomplete observations still fail closed, and disk/custody ownership
+checks remain required. Absence is used by first setup and the replacement/retirement barriers.
+
 Linux persistent secrets are printable tokens in one file per opaque account reference under
 `~/.local/state/cloudflare-publish/credentials/`. The directory must be owned by the current UID,
 mode 0700; files must be owned regular single-link files, mode 0600, opened without following
