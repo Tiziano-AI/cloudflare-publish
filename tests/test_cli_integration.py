@@ -196,7 +196,7 @@ def test_setup_refresh_only_prefers_missing_manager_state_over_tool_checks(
     assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 1
     captured = capsys.readouterr()
     assert "Setup refresh requires existing local manager state." in captured.err
-    assert "2025.4.0 or later is required" not in captured.err
+    assert "2026.10.3 or later is required" not in captured.err
 
 
 def test_setup_refresh_only_repairs_existing_manager(
@@ -237,19 +237,33 @@ def test_setup_refresh_waits_for_launchd_bootout_settlement(
     assert "com.cloudflare-publish.cloudflared" in fake_environment.launchd_labels()
 
 
+@pytest.mark.parametrize("version", ["2025.3.9", "2026.10.1", "2026.10.2"])
 def test_setup_rejects_unsupported_cloudflared_version(
     fake_environment: FakeEnvironment,
     capsys: pytest.CaptureFixture[str],
+    version: str,
 ) -> None:
-    """Setup fails early when the installed cloudflared is too old for `--token-file`."""
+    """The macOS security minimum fails before remote reads, credentials or native setup."""
 
     tool_state = fake_environment.tool_state()
-    tool_state["cloudflared_version"] = "cloudflared version 2025.3.9"
+    tool_state["cloudflared_version"] = f"cloudflared version {version}"
     _write_tool_state(fake_environment, tool_state)
 
     assert _setup(fake_environment) == 1
     captured = capsys.readouterr()
-    assert "2025.4.0 or later is required" in captured.err
+    assert "2026.10.3 or later is required" in captured.err
+    after = fake_environment.tool_state()
+    assert not after["cloudflare"].get("requests")
+    assert after["cloudflare"]["tunnels"] == {}
+    assert after["keychain"] == {}
+    assert fake_environment.launchd_labels() == ()
+    assert not (
+        fake_environment.home
+        / "Library"
+        / "Application Support"
+        / "cloudflare-publish"
+        / "state.json"
+    ).exists()
 
 
 def test_publish_update_remove_and_verify(fake_environment: FakeEnvironment) -> None:
@@ -345,13 +359,13 @@ def test_verify_fails_when_cloudflared_is_too_old(
 
     assert _setup(fake_environment) == 0
     tool_state = fake_environment.tool_state()
-    tool_state["cloudflared_version"] = "cloudflared version 2025.3.9"
+    tool_state["cloudflared_version"] = "cloudflared version 2026.10.2"
     _write_tool_state(fake_environment, tool_state)
 
     assert main(["verify"], repo_root=fake_environment.repo_root) == 1
     captured = capsys.readouterr()
-    assert "[FAIL] cloudflared supports --token-file" in captured.out
-    assert "cloudflared version 2025.3.9" in captured.out
+    assert "[FAIL] cloudflared meets security minimum" in captured.out
+    assert "cloudflared version 2026.10.2" in captured.out
 
 
 def test_publish_persists_manifest_before_tunnel_config_push(

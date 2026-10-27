@@ -115,13 +115,13 @@ def _repo_wrapper_check(paths: AppPaths) -> CheckResult:
 
 
 def _cloudflared_check(cloudflared: Cloudflared) -> CheckResult:
-    """Return whether cloudflared supports the product token-file contract."""
+    """Return whether the selected cloudflared meets the connector security minimum."""
 
     try:
-        version = cloudflared.require_token_file_support()
+        version = cloudflared.require_security_minimum()
     except AppError as error:
-        return CheckResult("cloudflared supports --token-file", ok=False, detail=error.message)
-    return CheckResult("cloudflared supports --token-file", ok=True, detail=version.raw)
+        return CheckResult("cloudflared meets security minimum", ok=False, detail=error.message)
+    return CheckResult("cloudflared meets security minimum", ok=True, detail=version.raw)
 
 
 def _cloudflare_reachability_check(*, http: CurlHttpClient, api_token: str) -> CheckResult:

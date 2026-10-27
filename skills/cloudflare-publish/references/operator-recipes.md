@@ -42,8 +42,9 @@ Linux dependencies are externally installed, never by the product.
 
 ### Linux prerequisites and bootstrap inputs
 
-Run as the intended host user. Have Python 3.12+, `uv`, official `cloudflared` 2025.4.0+, `curl`
-and `lsof` available before installing the CLI from the exact reviewed source or package root.
+Run as the intended host user. Have a security-patched Python 3.12+, `uv`, official `cloudflared`
+2026.10.2+, `curl` and `lsof` available before installing the CLI from the exact reviewed source or
+package root.
 Check native prerequisites without reading secrets:
 
 ```bash

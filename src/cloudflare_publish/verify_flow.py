@@ -230,15 +230,15 @@ def _local_checks(
 
 
 def _cloudflared_support_check(cloudflared: Cloudflared) -> CheckResult:
-    """Return the local `cloudflared` token-file support check."""
+    """Return the selected executable's connector security-minimum check."""
 
     try:
-        info = cloudflared.version_info()
+        info = cloudflared.require_security_minimum()
     except AppError as error:
-        return failed_check("cloudflared supports --token-file", error)
+        return failed_check("cloudflared meets security minimum", error)
     return CheckResult(
-        "cloudflared supports --token-file",
-        ok=info.supports_token_file,
+        "cloudflared meets security minimum",
+        ok=True,
         detail=info.raw,
     )
 

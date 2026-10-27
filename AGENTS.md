@@ -17,8 +17,8 @@ private-network routes, IdP setup and multi-account or multi-zone management are
 contract, and adding any of them starts with a change to `ARCH.md`. Setup stays fail-closed on any
 zone that is not `active` and `full`, because the product writes the zone's DNS records directly.
 Independent hosts never share a tunnel identity by copying credentials or state. The connector runs
-with `--token-file`, so every service path keeps requiring `cloudflared`
-`2025.4.0` or later.
+with `--token-file`; paths that start it also require the eMudhra security minimum:
+`cloudflared` `2026.10.3` on macOS and `2026.10.2` on Linux.
 
 - `ARCH.md` owns the product and CLI contract: command ownership, local paths, typed state,
   publication, verification and organization contracts, setup/recover/teardown sequences and the

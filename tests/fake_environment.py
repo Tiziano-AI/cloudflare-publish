@@ -212,7 +212,8 @@ def make_fake_environment(
     monkeypatch.delenv(LOCAL_DOTENV_ENV_VAR, raising=False)
     monkeypatch.setenv("CLOUDFLARE_PUBLISH_TEST_STATE", str(state_file))
     monkeypatch.setenv("CLOUDFLARE_PUBLISH_FAKE_BIN_DIR", str(bin_dir))
-    python_dir = Path(sys.executable).resolve().parent
+    # Keep the venv's python3 entrypoint: Homebrew's resolved framework directory lacks it.
+    python_dir = Path(sys.executable).parent
     monkeypatch.setenv("PATH", os.pathsep.join((str(bin_dir), str(python_dir), "/usr/bin", "/bin")))
 
     write_executable(bin_dir / "cloudflared-source", cloudflared_script())

@@ -154,7 +154,7 @@ def test_verify_json_failure_preserves_executed_check_evidence(
 
     assert _setup(fake_environment) == 0
     tool_state = fake_environment.tool_state()
-    tool_state["cloudflared_version"] = "cloudflared version 2025.3.9"
+    tool_state["cloudflared_version"] = "cloudflared version 2026.10.2"
     fake_environment.write_tool_state(tool_state)
     _ = capsys.readouterr()
 
@@ -166,7 +166,7 @@ def test_verify_json_failure_preserves_executed_check_evidence(
     assert payload["error"]["code"] == "verify_failed"
     assert payload["data"]["failures"] >= 1
     labels = {check["label"]: check for check in payload["data"]["checks"]}
-    assert labels["cloudflared supports --token-file"]["ok"] is False
+    assert labels["cloudflared meets security minimum"]["ok"] is False
 
 
 def test_verify_json_missing_manager_remains_public_diagnostic(

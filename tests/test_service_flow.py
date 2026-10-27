@@ -105,19 +105,21 @@ def test_service_start_requires_launch_agent_binary(
     assert "com.cloudflare-publish.cloudflared" not in fake_environment.launchd_labels()
 
 
+@pytest.mark.parametrize("command", ["start", "restart"])
 def test_service_start_rejects_downgraded_launch_agent_binary(
     fake_environment: FakeEnvironment,
     capsys: pytest.CaptureFixture[str],
+    command: str,
 ) -> None:
-    """Service start checks token-file support on the launch-agent binary."""
+    """Start/restart check the encoded binary's security floor before loading it."""
 
     assert _setup(fake_environment) == 0
     assert main(["service", "stop"], repo_root=fake_environment.repo_root) == 0
-    fake_environment.set_cloudflared_version("cloudflared version 2025.3.9")
+    fake_environment.set_cloudflared_version("cloudflared version 2026.10.2")
 
-    assert main(["service", "start"], repo_root=fake_environment.repo_root) == 1
+    assert main(["service", command], repo_root=fake_environment.repo_root) == 1
     captured = capsys.readouterr()
-    assert "2025.4.0 or later is required" in captured.err
+    assert "2026.10.3 or later is required" in captured.err
     assert "com.cloudflare-publish.cloudflared" not in fake_environment.launchd_labels()
 
 

@@ -294,6 +294,7 @@ Before calling a change done:
   rotate a missing completed-publication credential through `publish apply`.
 - Do not turn `repair resolve` into arbitrary adoption, cancellation, or forgetting pending work;
   it resolves only the saved exact effect after intent validation.
-- Do not add native service paths that rely on `cloudflared` older than `2025.4.0`.
+- Do not add native service paths that bypass the connector security minimum: `cloudflared`
+  `2026.10.3` on macOS and `2026.10.2` on Linux.
 - Do not auto-enable lingering, install Linux dependencies, invoke sudo, create system services,
   or turn independent host tunnels into replicas of a shared Mac manager.

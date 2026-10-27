@@ -119,8 +119,17 @@ and supported fields first and refuse foreign drift instead of overwriting it.
   sends `config_src: "cloudflare"` and tunnel configuration is managed through Cloudflare.
   - [Create a remotely managed tunnel with the API](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/)
 - `cloudflared tunnel run --token-file` is a supported tunnel-run parameter for remotely managed
-  tunnels and requires `cloudflared` `2025.4.0` or later in this product.
+  tunnels.
   - [Tunnel run parameters](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/run-parameters/)
+- The connector security minimum is `2026.10.3` on macOS and `2026.10.2` on Linux, covering the
+  eMudhra CA-key compromise. The macOS floor applies regardless of distribution: version output
+  alone does not establish that a Homebrew rebuild used the fixed Go toolchain. Upstream
+  `2026.10.3` raises its Go module minimum to the patched `1.27.3`.
+  - [Cloudflare incident guidance](https://blog.cloudflare.com/emudhra-certificate-compromise/)
+  - [Upstream Go minimum fix](https://github.com/cloudflare/cloudflared/commit/335438e55c499b3fe54c06294402301b3762f0d9)
+  - [Upstream macOS build-toolchain explanation](https://github.com/cloudflare/cloudflared/commit/ee83189f850799d54189d136c1389e13b03d3385)
+  Admission checks inspect the selected executable, not the already-running connector or the TLS
+  verifier used by `curl`; those consumers need their own runtime verification.
 - Tunnel tokens are retrievable by API. Cloudflare recommends rotating compromised tunnel tokens,
   then deleting tunnel connections so old connectors are forced off the edge.
   - [Tunnel tokens and rotation](https://developers.cloudflare.com/tunnel/reference/tunnel-tokens/)
@@ -711,7 +720,7 @@ lock, future-replica guarantee, token-revocation proof or session-drainage proof
 
 Initial setup order:
 
-1. ensure local tool availability, including `cloudflared` `2025.4.0` or later, and Linux user-manager/linger prerequisites before remote effects
+1. ensure local tool availability, including the platform's `cloudflared` security minimum, and Linux user-manager/linger prerequisites before remote effects
 2. ensure manager directories exist
 3. inspect canonical manager state plus conflicting legacy ownership
 4. require explicit `--takeover` for backup-safe macOS legacy ownership; refuse Linux takeover/conflicts
@@ -847,8 +856,9 @@ Local fail-closed rules:
   setup stops; only backup-safe macOS legacy takeover is supported with explicit `--takeover`
 - manager bootstrap fails if Cloudflare token, account, zone, or tunnel identity are ambiguous in
   non-interactive mode
-- setup, tunnel recover, and native-service repair paths fail if `cloudflared` is older than
-  `2025.4.0`
+- setup, tunnel recover, native-service repair, start and restart paths fail if the selected
+  `cloudflared` is older than `2026.10.3` on macOS or `2026.10.2` on Linux; readiness checks
+  report the same security minimum
 - setup refresh fails if the request tries to change account, zone, or tunnel name without teardown
 
 Remote fail-closed rules:

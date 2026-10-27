@@ -124,8 +124,14 @@ connector, and deletes all shared-tunnel connectors through the API.
 
 ## Version requirement
 
-The product requires `cloudflared` `2025.4.0` or later because it runs the connector with
-`cloudflared tunnel run --token-file`.
+The product requires `cloudflared` `2026.10.3` or later on macOS and `2026.10.2` or later on Linux
+for the eMudhra CA-key compromise mitigation. macOS uses one minimum for every distribution;
+version output cannot prove the toolchain of a Homebrew rebuild. See
+[Cloudflare's incident guidance](https://blog.cloudflare.com/emudhra-certificate-compromise/).
+`--token-file` remains mandatory, but that older capability alone is not security readiness.
+Checking the executable does not prove that an already-running connector has adopted it, or that
+the separate `curl` TLS verifier rejects the compromised CAs. Updating or restarting those consumers
+is a separate, authorized operation; never disable certificate verification to bypass a failure.
 
 ## Operator rules
 

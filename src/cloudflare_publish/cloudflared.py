@@ -7,10 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cloudflare_publish.errors import AppError
+from cloudflare_publish.host_platform import HostPlatform
 from cloudflare_publish.process import CommandRunner
 
-MIN_TOKEN_FILE_VERSION = (2025, 4, 0)
-MIN_TOKEN_FILE_VERSION_TEXT = "2025.4.0"
+MIN_SECURITY_VERSIONS: dict[HostPlatform, tuple[int, int, int]] = {
+    "darwin": (2026, 10, 3),
+    "linux": (2026, 10, 2),
+}
 
 
 @dataclass(frozen=True)
@@ -19,21 +22,29 @@ class CloudflaredVersionInfo:
 
     raw: str
     parsed: tuple[int, int, int]
+    minimum: tuple[int, int, int]
 
     @property
-    def supports_token_file(self) -> bool:
-        """Return whether this version supports `cloudflared tunnel run --token-file`."""
+    def meets_security_minimum(self) -> bool:
+        """Return whether this executable meets the host's connector security floor."""
 
-        return self.parsed >= MIN_TOKEN_FILE_VERSION
+        return self.parsed >= self.minimum
+
+    @property
+    def minimum_text(self) -> str:
+        """Return the required version in the vendor's dotted release format."""
+
+        return ".".join(str(part) for part in self.minimum)
 
 
 class Cloudflared:
     """Runs `cloudflared` commands through the shared process adapter."""
 
-    def __init__(self, runner: CommandRunner) -> None:
-        """Store the command runner used by the adapter."""
+    def __init__(self, runner: CommandRunner, *, platform: HostPlatform) -> None:
+        """Store the command runner and the admitted native host's security floor."""
 
         self._runner: CommandRunner = runner
+        self._minimum: tuple[int, int, int] = MIN_SECURITY_VERSIONS[platform]
 
     def binary(self) -> Path | None:
         """Return the resolved cloudflared binary."""
@@ -71,13 +82,13 @@ class Cloudflared:
         raw = self.version_for_binary(binary)
         return self._parse_version_info(raw)
 
-    def require_token_file_support_for_binary(self, binary: Path) -> CloudflaredVersionInfo:
-        """Require token-file support from the launch-agent `cloudflared` binary."""
+    def require_security_minimum_for_binary(self, binary: Path) -> CloudflaredVersionInfo:
+        """Require the security floor from the native-service `cloudflared` binary."""
 
         info = self.version_info_for_binary(binary)
-        if not info.supports_token_file:
+        if not info.meets_security_minimum:
             raise AppError(
-                f"cloudflared {MIN_TOKEN_FILE_VERSION_TEXT} or later is required.",
+                f"cloudflared {info.minimum_text} or later is required for the security minimum.",
                 hints=(
                     f"Detected {info.raw}.",
                     "Upgrade cloudflared and rerun `cloudflare-publish setup`.",
@@ -85,13 +96,13 @@ class Cloudflared:
             )
         return info
 
-    def require_token_file_support(self) -> CloudflaredVersionInfo:
-        """Require support for `cloudflared tunnel run --token-file`."""
+    def require_security_minimum(self) -> CloudflaredVersionInfo:
+        """Require the security floor from the PATH-selected `cloudflared` binary."""
 
         info = self.version_info()
-        if not info.supports_token_file:
+        if not info.meets_security_minimum:
             raise AppError(
-                f"cloudflared {MIN_TOKEN_FILE_VERSION_TEXT} or later is required.",
+                f"cloudflared {info.minimum_text} or later is required for the security minimum.",
                 hints=(
                     f"Detected {info.raw}.",
                     "Upgrade cloudflared and rerun the command.",
@@ -115,4 +126,5 @@ class Cloudflared:
                 int(matched.group("minor")),
                 int(matched.group("patch")),
             ),
+            minimum=self._minimum,
         )

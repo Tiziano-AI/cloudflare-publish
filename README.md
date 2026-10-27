@@ -52,8 +52,8 @@ its scope. See [ARCH.md](ARCH.md) for the full ownership and security contract.
 
 - macOS, or Linux with systemd 240 or later, a working systemd user manager/bus, and
   `Linger=yes` for unattended operation across logout/reboot
-- `uv` and Python 3.12 or later (`uv` can manage the Python interpreter)
-- `cloudflared` `2025.4.0` or later
+- `uv` and a security-patched Python 3.12 or later (`uv` can manage the Python interpreter)
+- `cloudflared` `2026.10.3` or later on macOS; `2026.10.2` or later on Linux
 - `curl` and `lsof` on `PATH`; `lsof` supplies exact connector-owned listener evidence
 - native OpenSSH client for SSH verification; an independently configured local SSH server and its
   trusted Ed25519 public host key for SSH publication
@@ -68,6 +68,12 @@ The hostname also needs a valid Cloudflare edge certificate. For nested names su
 calls for an Advanced Certificate for multi-level subdomains. This CLI does not order certificates.
 
 Human-access publications assume the Zero Trust organization already has a usable login method.
+
+The connector minimum covers the [eMudhra CA-key compromise](https://blog.cloudflare.com/emudhra-certificate-compromise/).
+macOS uses the same minimum for every distribution because version output cannot establish the
+build toolchain. A readiness check inspects the selected executable, not an already-running
+connector. Python and `curl` use separate TLS verification paths; keep their interpreters and trust
+stores patched too. Source updates do not install or restart any of these consumers.
 
 ## Install The CLI And Plugin
 
@@ -485,7 +491,7 @@ cloudflare-publish setup --refresh-only
 - `--refresh-only` is used before local manager state exists
 - the platform, systemd version, user bus, lingering, or external dependencies are unsupported
 - conflicting local `cloudflared` state exists and `--takeover` is missing
-- `cloudflared` is older than `2025.4.0`
+- `cloudflared` is below the security minimum (`2026.10.3` on macOS, `2026.10.2` on Linux)
 - the token cannot see the chosen account or zone
 - the chosen zone does not belong to the chosen account
 - the chosen zone is not `active` and `full`
@@ -500,7 +506,8 @@ An uncertain creation is resolved through `repair plan` and exact-resource resol
 ### Linux bootstrap
 
 Run as the intended non-root publishing user on each host, never by copying the Mac manager.
-The operator supplies Python 3.12+, `uv`, official `cloudflared` 2025.4.0+, `curl`, and `lsof`.
+The operator supplies a security-patched Python 3.12+, `uv`, official `cloudflared` 2026.10.2+,
+`curl`, and `lsof`.
 Confirm the native user manager before authorizing any Cloudflare creation:
 
 ```bash

@@ -77,6 +77,26 @@ def test_linux_rejects_mac_only_setup_effects(
     assert linux_environment.tool_state()["brew_calls"] == 0
 
 
+@pytest.mark.parametrize("version", ["2026.10.1", "2026.10.2"])
+def test_linux_connector_security_minimum(
+    linux_environment: FakeEnvironment, version: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Linux rejects pre-mitigation builds but admits the vendor's fixed 2026.10.2 release."""
+
+    env = linux_environment
+    env.set_cloudflared_version(f"cloudflared version {version}")
+    if version == "2026.10.1":
+        assert _setup(env) == 1
+        assert "2026.10.2 or later is required" in capsys.readouterr().err
+        assert not _cloudflare(env).get("requests")
+        assert not _paths(env).state_file.exists()
+        assert not (_paths(env).state_dir / "credentials").exists()
+        assert not _paths(env).service_file.exists()
+    else:
+        assert _setup(env) == 0
+        assert env.tool_state()["systemd_active"] is True
+
+
 @pytest.mark.parametrize("ancestor", [".config/systemd", ".config/systemd/user"])
 def test_linux_unsafe_service_directory_has_precise_json_and_no_bootstrap_effects(
     linux_environment: FakeEnvironment, ancestor: str, capsys: pytest.CaptureFixture[str]

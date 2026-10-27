@@ -199,7 +199,7 @@ def _require_startable_connector(
         )
     launchd.preflight()
     binary = launchd.validate_definition()
-    _ = cloudflared.require_token_file_support_for_binary(binary)
+    _ = cloudflared.require_security_minimum_for_binary(binary)
 
 
 def _connector_binary_state(cloudflared: Cloudflared, launchd: ConnectorService) -> str:
@@ -210,7 +210,11 @@ def _connector_binary_state(cloudflared: Cloudflared, launchd: ConnectorService)
         info = cloudflared.version_info_for_binary(binary)
     except AppError as error:
         return error.message
-    suffix = "supports --token-file" if info.supports_token_file else "too old for --token-file"
+    suffix = (
+        "meets security minimum"
+        if info.meets_security_minimum
+        else f"below security minimum {info.minimum_text}"
+    )
     return f"{binary}: {info.raw} ({suffix})"
 
 

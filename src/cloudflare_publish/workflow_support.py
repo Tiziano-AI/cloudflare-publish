@@ -48,7 +48,7 @@ def ensure_platform_tools(
         if launchd.which("brew") is None:
             raise AppError("Homebrew is required for --install-deps.")
         _ = launchd.run(["brew", "install", "cloudflared"])
-    _ = cloudflared.require_token_file_support()
+    _ = cloudflared.require_security_minimum()
     for program in ("curl",):
         if launchd.which(program) is None:
             raise AppError(f"Required tool {program!r} is not available on PATH.")

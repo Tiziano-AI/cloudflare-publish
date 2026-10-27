@@ -11,7 +11,7 @@ def initial_tool_state() -> str:
 
     return (
         "{\n"
-        '  "cloudflared_version": "cloudflared version 2026.3.0",\n'
+        '  "cloudflared_version": "cloudflared version 2026.10.3",\n'
         '  "launchd_labels": [],\n'
         '  "launchd_pids": {},\n'
         '  "launchd_statuses": {},\n'

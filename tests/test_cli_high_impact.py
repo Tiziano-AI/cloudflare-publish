@@ -90,7 +90,7 @@ def test_tunnel_recover_prefers_missing_manager_state_over_tool_checks(
     assert main(["tunnel", "recover", "apply", "--yes"], repo_root=fake_environment.repo_root) == 1
     captured = capsys.readouterr()
     assert "Manager state is missing" in captured.err
-    assert "2025.4.0 or later is required" not in captured.err
+    assert "2026.10.3 or later is required" not in captured.err
 
 
 def test_token_rotate_and_guard_apply_require_confirmation(

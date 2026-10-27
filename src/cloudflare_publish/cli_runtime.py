@@ -35,7 +35,7 @@ def build_cli_runtime(*, repo_root: Path | None, home: Path | None) -> CliRuntim
     runner = CommandRunner()
     return CliRuntime(
         paths=paths,
-        cloudflared=Cloudflared(runner),
+        cloudflared=Cloudflared(runner, platform=paths.host_platform),
         http=CurlHttpClient(runner),
         keychain=(
             Keychain(runner)

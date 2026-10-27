@@ -268,7 +268,7 @@ def _collect(tmp_path: Path, publication_name: str | None = None) -> tuple[Check
     runner = CommandRunner()
     return collect_verify_checks(
         paths=paths,
-        cloudflared=Cloudflared(runner),
+        cloudflared=Cloudflared(runner, platform=paths.host_platform),
         launchd=Launchd(runner, paths),
         keychain=Keychain(runner),
         http=CurlHttpClient(runner),

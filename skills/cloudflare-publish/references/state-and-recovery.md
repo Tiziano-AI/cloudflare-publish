@@ -88,8 +88,8 @@ The old `*_keychain_account` manifest names are opaque references to the selecte
 - `setup` fails unless the chosen zone is `active` and `full`.
 - `setup --refresh-only` fails before platform-tool checks unless local manager state already exists.
 - `setup`, `service start`, `service restart`, `tunnel recover apply`, and native service repair paths
-  require `cloudflared` `2025.4.0` or later because the product uses `cloudflared tunnel run
-  --token-file`.
+  require the connector security minimum: `cloudflared` `2026.10.3` on macOS and `2026.10.2` on
+  Linux. A version that supports `--token-file` can still be below this security minimum.
 - `service start` and `service restart` fail unless the existing native service file uses the
   canonical identity, manager token file, absolute binary and token-file command shape.
 - SSH publications require a valid independently trusted Ed25519 host-key pin and machine-only
