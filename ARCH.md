@@ -206,7 +206,8 @@ development source for the CLI and native agent plugin. A release is an annotate
 on this repository, and that tag is the CLI's only distribution channel:
 `uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v<version>`. There is no
 package-index project, release asset or Homebrew formula. The `tiziano-ai` marketplace pins the
-tagged commit with a `git-subdir` source whose path is `plugin`, so hosts install only the
+tag's commit (the peeled commit, not the annotated tag object, which hosts refuse) with a
+`git-subdir` source whose path is `plugin`, so hosts install only the
 skills-only payload; it is not a second source tree or development engine. The skill pins the CLI
 version it was written for, and the package validator binds that pin, both manifests, every pinned
 install command and `pyproject.toml` to one version. CLI installation and each host's native plugin
@@ -417,7 +418,12 @@ client secret is only printed by `publish` and `token rotate`. Plain HTTP origin
 verification as not applicable.
 
 `doctor` is a diagnostic command. It exits zero when diagnostics complete, even when the reported
-state is not ready. `verify` remains the readiness command that exits nonzero on failed checks.
+state is not ready. Its checks, all of which count toward `data.ready`, cover the platform, native
+user-service prerequisites, the `cloudflared` security minimum, the state, token and native service
+files, the loaded native service, API-token availability and, with a token, account reachability.
+Which `cloudflare-publish` or `uv` a shell's `PATH` selects is not readiness: the connector runs
+`cloudflared`, `uv` only installs the CLI, and a CLI called by its absolute uv tool path is as
+ready as one on `PATH`. `verify` remains the readiness command that exits nonzero on failed checks.
 When `verify --json` executes checks and fails, the error envelope preserves `data.checks` and
 `data.failures` so automation can see the failing evidence. Both successful and failed verification
 results also expose `data.groups`: populated groups in order, with `group`, `checks`, and `failures` for
@@ -939,21 +945,27 @@ replaces the installed CLI in place, newer or older, and leaves manager state un
 only and never contains, installs or runs the CLI by itself.
 
 The skill's CLI preflight selects the installed command from `PATH`, or from uv's tool directory by
-absolute path until `PATH` includes it, and compares its `--version` with the pinned version. A
-missing CLI is installed from the pinned tag only with the person's consent (a request to install or
-set up is that consent) and only when `uv` is present; a missing `uv` is reported, never installed.
-An older CLI is offered the pinned tag before setup or any apply, except that a pending transition
-is first recovered with the installed version: versions never change mid-recovery. A newer CLI is
-never downgraded, because an older CLI may not read state a newer one wrote; the person updates
-the plugin instead. Teardown, recovery and repair always use the installed CLI. A plugin folder,
-source checkout, `uv run` or `uvx` is never the operator runtime. The operator must explicitly
-configure cloudflared and their own account, zone, login method, and token before the first
-publication. No install hook bootstraps services or credentials.
+absolute path until `PATH` includes it (finding `uv` itself in its default bin directory when
+`PATH` lacks it), and compares its `--version` with the pinned version. A missing CLI is installed
+from the pinned tag only with the person's consent (a request to install or set up is that consent)
+and only when `uv` is present; a missing `uv` is reported, never installed. An older CLI is offered
+the pinned tag before setup or any apply, except that a pending transition, read offline with
+`--json ls`, is first recovered with the installed version: versions never change mid-recovery. A
+newer CLI is never downgraded, because an older CLI may not read state a newer one wrote; the
+person updates the plugin instead. An installed CLI performs teardown, recovery and repair at its
+own version. When only manager state remains, the pinned CLI is installed with consent first, and
+a refusal of that state as unsupported stops the work rather than trying other versions. A plugin
+folder, source checkout, `uv run` or `uvx` is never the operator runtime. The operator must
+explicitly configure cloudflared and their own account, zone, login method, and token before the
+first publication. No install hook bootstraps services or credentials.
 
-`devtools/validate_package.py` checks the `plugin/` payload allowlist, metadata coherence, the
-skill's pinned CLI version and every pinned install command against `pyproject.toml`, skill file
-closure, local Markdown references, script syntax/modes, icon signatures, and private workstation
-dependencies. It does not install a package, qualify either host, or contact Cloudflare. The gate
+`devtools/validate_package.py` checks the `plugin/` payload allowlist, the skill tree's file shapes
+(`SKILL.md`, `agents/openai.yaml`, `references/*.md`, executable `scripts/*.sh`, `assets/*`),
+manifests that declare no hooks, MCP servers or apps, metadata coherence, the skill's pinned CLI
+version and every pinned install command against `pyproject.toml` (rejecting unpinned or
+package-index install forms), skill file closure, local Markdown references, script syntax/modes,
+icon signatures, and private workstation dependencies. It does not install a package, qualify
+either host, or contact Cloudflare. The gate
 also exercises CLI behavior with the documented hermetic fake environment.
 
 Disabling or removing the plugin stops host discovery only. `uv tool uninstall cloudflare-publish`

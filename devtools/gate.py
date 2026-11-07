@@ -31,7 +31,7 @@ def main() -> int:
     else:
         _ = sys.stdout.write("SKIP shellcheck (not installed locally)\n")
     if shutil.which("shfmt") is not None:
-        _run(["shfmt", "-d", INSPECTOR], cwd=repo_root)
+        _run(["shfmt", "-i", "2", "-d", INSPECTOR], cwd=repo_root)
     else:
         _ = sys.stdout.write("SKIP shfmt (not installed locally)\n")
     return 0

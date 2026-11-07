@@ -91,17 +91,20 @@ uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v0.4.0
 `uv` fetches that tag with `git`, builds it into an isolated tool environment and links
 `cloudflare-publish` into its tool directory, usually `~/.local/bin` (`uv tool dir --bin` prints
 it). If `uv` warns that this directory is not on `PATH`, run `uv tool update-shell` and open a new
-shell. CLI installation does not install cloudflared, start a connector, read credentials, or
-configure Cloudflare.
+shell; until then, call the CLI by its absolute path in that directory. The install also
+downloads the build backend (setuptools) from PyPI, or from the package index uv is configured to
+use, and uv downloads a Python 3.12+ itself when it finds none. CLI installation does not install
+cloudflared, start a connector, read credentials, or configure Cloudflare.
 
 On macOS, install `uv` with `brew install uv` or the
 [uv installer](https://docs.astral.sh/uv/getting-started/installation/); `git` comes with the
 Xcode Command Line Tools (`xcode-select --install`). To work on the source instead, see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-On Linux, the operator installs dependencies through their supported upstream/distribution route;
-the product does not install packages or system services. See [Linux bootstrap](#linux-bootstrap)
-before running setup on a headless host.
+On Linux, the operator installs dependencies through their supported upstream/distribution route,
+`uv` through the [uv installer](https://docs.astral.sh/uv/getting-started/installation/) or the
+distribution's package; the product does not install packages or system services. See
+[Linux bootstrap](#linux-bootstrap) before running setup on a headless host.
 
 Check the installed CLI without credentials or network calls:
 
@@ -245,7 +248,8 @@ the CLI and remove the plugin through the host. Teardown preserves takeover back
 
 Replace `NAME` with a managed publication name. `doctor` reports diagnostic completion, not
 readiness: even exit zero and `ok: true` can accompany `data.ready: false`. Read `data.ready` and
-`data.checks`; use `verify` for a failing exit status when readiness checks fail.
+`data.checks`; use `verify` for a failing exit status when readiness checks fail. `doctor` does not
+check which `cloudflare-publish` or `uv` your `PATH` selects; use `command -v` for that.
 
 `doctor` resolves credentials and may contact Cloudflare. `verify` and `repair plan` also probe origins. Their HTTP
 requests use private temporary curl files; SSH checks also use private temporary known-host material
@@ -560,8 +564,11 @@ TCP/7844 (HTTP/2) to Cloudflare's documented tunnel destinations. Allowing both 
 robust configuration; HTTP/2 can work when UDP is blocked, but HTTPS/443 does not replace blocked
 7844. Follow the current [Cloudflare firewall destination and SNI list](https://developers.cloudflare.com/tunnel/configuration/#firewall-rules)
 rather than freezing IPs here. This manager also needs HTTPS/443 to `api.cloudflare.com`; package
-downloads need HTTPS to the selected official repository or release source. Those management and
-download connections are distinct from tunnel transport.
+downloads need HTTPS to the selected official repository or release source. Installing the CLI
+needs HTTPS to `github.com` for the release tag, to PyPI (`pypi.org` and `files.pythonhosted.org`)
+or the configured index mirror for the build backend, and to uv's Python download source when uv
+supplies the interpreter. Those management and download connections are distinct from tunnel
+transport.
 
 Cloudflare supplies Linux ARM64 binaries, DEB and RPM packages. On Debian/Ubuntu-derived hosts,
 check the actual package architecture and use the current official instructions, including their

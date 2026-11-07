@@ -85,7 +85,7 @@ hardware qualification or an architecture restriction. The operator supplies mat
   packages. Do not restore the Python basedpyright package: it selects a separately bundled Node
   runtime instead of the developer's patched Node.
 - `uv run devtools/gate.py` is the gate: ruff lint and format check, basedpyright, pytest,
-  `uv run cloudflare-publish --help`, plugin validation, and shellcheck and shfmt over the
+  `uv run cloudflare-publish --help`, plugin validation, and shellcheck and `shfmt -i 2` over the
   inspection script when installed. The
   typecheck invokes the repository-local npm binary, with no download, global fallback or bootstrap.
   A repo or skill change is incomplete until it passes.
@@ -98,7 +98,9 @@ hardware qualification or an architecture restriction. The operator supplies mat
   (`doctor`, `verify`, `repair plan`) make no Cloudflare or managed-state
   writes, so neither they nor the gate show that a live write works; report which of them actually
   ran. Live verification is manual on the publishing host and account:
-  `uv run cloudflare-publish verify --live` from the checkout under test.
+  `uv run cloudflare-publish verify --live` from the checkout under test. That is read-only
+  development acceptance; running the checkout against the real manager stays with read-only
+  commands, and setup, apply, recovery and teardown always use the installed CLI.
   Linux additionally needs real user-service ownership/readback, logout/reboot persistence,
   secret-permission, connector-listener evidence, and intended-client HTTPS/WSS negative and
   authenticated acceptance. Hermetic tests do not establish any of these live outcomes.
@@ -126,8 +128,9 @@ hardware qualification or an architecture restriction. The operator supplies mat
   global skill copier, install hook, timer, watcher or unattended sync.
 - A release bumps `pyproject.toml`, `uv.lock`, both manifests, the skill's pinned CLI version and
   the pinned install commands together, passes the gate, and is committed, tagged and pushed with
-  `main`; the marketplace then pins the tagged commit with a `git-subdir` source at path `plugin`.
-  CONTRIBUTING.md's Releases section owns the steps.
+  `main`; the marketplace then pins the tag's commit (`git rev-parse "v<version>^{commit}"`, not
+  the annotated tag object) with a `git-subdir` source at path `plugin`. CONTRIBUTING.md's Releases
+  section owns the steps.
 - `make validate-package` checks the source package offline. After a CLI installation, smoke-test
   from outside the checkout with `command -v cloudflare-publish`, `cloudflare-publish --version`
   and `cloudflare-publish --help`. Add `cloudflare-publish --json doctor` only when auth and manager
@@ -140,15 +143,18 @@ hardware qualification or an architecture restriction. The operator supplies mat
   `$HOME/.agents/skills` and does not merge packages with the same name, so a copy there would
   expose a duplicate. Do not install a second global skill beside the native plugin.
 - The package is a portable skills-only plugin. `devtools/validate_package.py`, which the gate
-  runs, checks that `plugin/` holds only its manifests, `LICENSE` and `skills/`, identity
-  coherence, that the skill's pinned CLI version and every pinned install command match
-  `pyproject.toml`, skill file/link closure, scripts, icons and private workstation dependencies.
+  runs, checks that `plugin/` holds only its manifests, `LICENSE` and `skills/`, that the skill
+  tree holds only its guidance file shapes, that the manifests declare no hooks, MCP servers or
+  apps, identity coherence, that the skill's pinned CLI version and every pinned install command
+  match `pyproject.toml`, skill file/link closure, scripts, icons and private workstation
+  dependencies.
   It does not prove host activation or live operations. Review routing changes against
   `devtools/skill-review-scenarios.md`.
 - The skill's CLI preflight owns installed-command selection and version handling: install a
-  missing CLI with consent, offer the pinned tag to an older one unless a pending transition must
-  first be recovered with the installed version, never downgrade a newer one, and never run the
-  CLI from the plugin folder, a checkout, `uv run` or `uvx`.
+  missing CLI with consent (also when only manager state remains and teardown or recovery needs
+  it), offer the pinned tag to an older one unless a pending transition must first be recovered
+  with the installed version, never downgrade a newer one, and never run the CLI from the plugin
+  folder, a checkout, `uv run` or `uvx`.
 - Workstation paths and secret configuration belong to machine configuration, not to the package.
   Removing the plugin or CLI must not implicitly retire infrastructure or erase recovery state;
   README.md's Upgrade And Removal section owns the operator sequence.

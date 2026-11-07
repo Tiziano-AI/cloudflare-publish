@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,9 @@ def _copy_package(destination: Path) -> Path:
     destination.mkdir()
     for relative in ("pyproject.toml", "LICENSE", "README.md"):
         shutil.copy2(REPO_ROOT / relative, destination / relative)
+    (destination / "devtools").mkdir()
+    for document in (REPO_ROOT / "devtools").glob("*.md"):
+        shutil.copy2(document, destination / "devtools" / document.name)
     plugin = destination / "plugin"
     plugin.mkdir()
     for relative in ("plugin.json", "LICENSE"):
@@ -225,6 +229,219 @@ def test_plugin_payload_admits_only_guidance(tmp_path: Path, entry: str) -> None
     assert entry.rsplit("/", maxsplit=1)[-1] in completed.stderr
 
 
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "bin/cloudflare-publish",
+        "hooks/hooks.json",
+        "src/cloudflare_publish/cli.py",
+        "package.json",
+        "pyproject.toml",
+        "references/notes.txt",
+        "scripts/install.py",
+    ],
+)
+def test_skill_tree_admits_only_guidance(tmp_path: Path, entry: str) -> None:
+    """A CLI copy, hook, manifest or source file nested inside the skill is still payload."""
+
+    package = _copy_package(tmp_path / "package")
+    target = package / "plugin" / "skills" / "cloudflare-publish" / entry
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("#!/bin/sh\n")
+    target.chmod(0o644)
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "skill may contain only" in completed.stderr
+    assert f"remove: {entry.split('/', maxsplit=1)[0]}" in completed.stderr
+
+
+def test_only_skill_scripts_are_executable(tmp_path: Path) -> None:
+    """Guidance files stay non-executable; the inspection script is the one executable shape."""
+
+    package = _copy_package(tmp_path / "package")
+    (package / "plugin" / "skills" / "cloudflare-publish" / "SKILL.md").chmod(0o755)
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "must have mode 0644" in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("scope", "key"),
+    [
+        ("manifest", "hooks"),
+        ("manifest", "mcpServers"),
+        ("manifest", "apps"),
+        ("extensions", "com.example"),
+        ("com.openai", "hooks"),
+        ("com.openai", "apps"),
+    ],
+)
+def test_portable_manifest_declares_no_execution_surface(
+    tmp_path: Path, scope: str, key: str
+) -> None:
+    """Inline hooks, MCP servers or apps would execute without any file in the payload."""
+
+    package = _copy_package(tmp_path / "package")
+    manifest_path = package / "plugin" / "plugin.json"
+    manifest = json.loads(manifest_path.read_text())
+    targets = {
+        "manifest": manifest,
+        "extensions": manifest["extensions"],
+        "com.openai": manifest["extensions"]["com.openai"],
+    }
+    targets[scope][key] = {"SessionStart": [{"command": "cloudflare-publish setup"}]}
+    manifest_path.write_text(json.dumps(manifest))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    if scope == "extensions":
+        assert "only the com.openai extension" in completed.stderr
+    else:
+        assert f"extra: {key}" in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("command", "message"),
+    [
+        ("git+https://github.com/Tiziano-AI/cloudflare-publish.git@v0.3.2", "pins v0.3.2"),
+        ("git+https://github.com/tiziano-ai/cloudflare-publish@v0.3.2", "pins v0.3.2"),
+        ("git+https://github.com/Tiziano-AI/cloudflare-publish@main", "must name a tag"),
+        ("git+https://github.com/Tiziano-AI/cloudflare-publish", "must name a tag"),
+        ("uv tool install cloudflare-publish==0.3.2", "package-index install"),
+        ("uvx cloudflare-publish --help", "package-index install"),
+    ],
+)
+def test_install_commands_use_only_the_release_tag(
+    tmp_path: Path, command: str, message: str
+) -> None:
+    """Another spelling, an unpinned ref or an index install cannot slip past the pin check."""
+
+    package = _copy_package(tmp_path / "package")
+    recipes = package / "plugin" / "skills" / "cloudflare-publish" / "references"
+    document = recipes / "operator-recipes.md"
+    document.write_text(document.read_text() + f"\nRun `{command}`.\n")
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert message in completed.stderr
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "devtools/skill-review-scenarios.md",
+        "plugin/plugin.json",
+        "plugin/.claude-plugin/plugin.json",
+    ],
+)
+def test_install_pins_are_checked_in_scenarios_and_manifests(tmp_path: Path, relative: str) -> None:
+    """Review scenarios and listing text are read by people choosing what to install."""
+
+    package = _copy_package(tmp_path / "package")
+    document = package / relative
+    stale = "git+https://github.com/Tiziano-AI/cloudflare-publish@v0.3.2"
+    if document.suffix == ".json":
+        manifest = json.loads(document.read_text())
+        manifest["description"] = f"Install with {stale}."
+        if relative == "plugin/plugin.json":
+            native = package / "plugin" / ".claude-plugin" / "plugin.json"
+        else:
+            native = package / "plugin" / "plugin.json"
+        other = json.loads(native.read_text())
+        other["description"] = manifest["description"]
+        native.write_text(json.dumps(other))
+        document.write_text(json.dumps(manifest))
+    else:
+        document.write_text(document.read_text() + f"\nRun `uv tool install {stale}`.\n")
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "pins v0.3.2" in completed.stderr
+
+
+def test_sentence_period_after_pin_is_not_part_of_the_version(tmp_path: Path) -> None:
+    """Prose may end a sentence with the install source."""
+
+    package = _copy_package(tmp_path / "package")
+    readme = package / "README.md"
+    readme.write_text(readme.read_text() + f"\nThe release installs from {INSTALL}.\n")
+    completed = _validate(package)
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize("relative", ["README.md", "plugin/skills/cloudflare-publish/SKILL.md"])
+def test_operator_entrypoints_carry_the_pinned_install(tmp_path: Path, relative: str) -> None:
+    """README and the skill each give the exact command rather than only a placeholder."""
+
+    package = _copy_package(tmp_path / "package")
+    document = package / relative
+    placeholder = "git+https://github.com/Tiziano-AI/cloudflare-publish@v<version>"
+    document.write_text(document.read_text().replace(INSTALL, placeholder))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert f"pinned install command is missing from {document.name}" in completed.stderr
+
+
+def _remove_license(plugin: Path) -> None:
+    (plugin / "LICENSE").unlink()
+
+
+def _link_license(plugin: Path) -> None:
+    (plugin / "LICENSE").unlink()
+    (plugin / "LICENSE").symlink_to(plugin.parent / "LICENSE")
+
+
+def _link_manifest(plugin: Path) -> None:
+    manifest = plugin / "plugin.json"
+    _ = shutil.move(manifest, plugin.parent / "plugin.json")
+    manifest.symlink_to(plugin.parent / "plugin.json")
+
+
+def _remove_native_manifest(plugin: Path) -> None:
+    shutil.rmtree(plugin / ".claude-plugin")
+
+
+def _link_plugin_directory(plugin: Path) -> None:
+    _ = shutil.move(plugin, plugin.parent / "plugin-real")
+    plugin.symlink_to(plugin.parent / "plugin-real")
+
+
+def _remove_composer_icon(plugin: Path) -> None:
+    manifest = json.loads((plugin / "plugin.json").read_text())
+    del manifest["extensions"]["com.openai"]["interface"]["composerIcon"]
+    (plugin / "plugin.json").write_text(json.dumps(manifest))
+
+
+@pytest.mark.parametrize(
+    ("damage", "message"),
+    [
+        (_remove_license, "plugin payload is missing: LICENSE"),
+        (_link_license, "plugin/LICENSE must be a regular file"),
+        (_link_manifest, "plugin manifest must be a regular file: plugin.json"),
+        (_remove_native_manifest, "plugin payload is missing: .claude-plugin"),
+        (_link_plugin_directory, "plugin/ must be a real directory"),
+        (_remove_composer_icon, "portable listing must declare composerIcon"),
+    ],
+)
+def test_payload_structure_is_complete_and_regular(
+    tmp_path: Path, damage: Callable[[Path], None], message: str
+) -> None:
+    """Each payload part is a real file or directory that a git-subdir install will carry."""
+
+    package = _copy_package(tmp_path / "package")
+    damage(package / "plugin")
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert message in completed.stderr
+
+
+def test_finder_metadata_is_ignored_at_any_depth(tmp_path: Path) -> None:
+    """Git and the sdist exclude .DS_Store, so it never reaches an installed plugin."""
+
+    package = _copy_package(tmp_path / "package")
+    for directory in ("plugin", "plugin/skills", "plugin/skills/cloudflare-publish/references"):
+        (package / directory / ".DS_Store").write_bytes(b"\0")
+    completed = _validate(package)
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_plugin_license_matches_root_license(tmp_path: Path) -> None:
     """The license notice that ships with the guidance is the repository's own license."""
 
@@ -286,7 +503,7 @@ def _fake_cli(directory: Path) -> Path:
 
 def _inspect(tmp_path: Path, path_entries: list[Path]) -> subprocess.CompletedProcess[str]:
     user_dir = tmp_path / "user"
-    user_dir.mkdir()
+    user_dir.mkdir(exist_ok=True)
     return subprocess.run(
         ["bash", str(SOURCE_ROOT / "scripts" / "inspect-manager.sh")],
         capture_output=True,
@@ -310,6 +527,23 @@ def test_diagnostic_falls_back_to_uv_tool_directory(tmp_path: Path) -> None:
     uv.chmod(0o755)
     completed = _inspect(tmp_path, [tools])
     assert completed.returncode == 0, completed.stderr
+    assert f"{installed}\n" in completed.stdout
+    assert "not on PATH; call it by this absolute path" in completed.stdout
+
+
+def test_diagnostic_finds_uv_and_cli_off_path_in_default_bin(tmp_path: Path) -> None:
+    """uv's standalone install and its tool links share a default directory PATH may lack."""
+
+    default_bin = tmp_path / "user" / ".local" / "bin"
+    installed = _fake_cli(default_bin)
+    uv = default_bin / "uv"
+    uv.write_text(
+        f'#!/bin/sh\n[ "$*" = "tool dir --bin" ] || exit 2\nprintf "%s\\n" "{default_bin}"\n'
+    )
+    uv.chmod(0o755)
+    completed = _inspect(tmp_path, [])
+    assert completed.returncode == 0, completed.stderr
+    assert f"uv={uv} (not on PATH" in completed.stdout
     assert f"{installed}\n" in completed.stdout
     assert "not on PATH; call it by this absolute path" in completed.stdout
 

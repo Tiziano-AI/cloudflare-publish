@@ -39,10 +39,12 @@ cloudflare-publish --help
 ```
 
 If `command -v` finds nothing, check `"$(uv tool dir --bin)/cloudflare-publish"` and call it by
-that absolute path. These commands are offline and read no credentials. They establish selection
-and the installed version, not manager readiness; compare the version as the CLI preflight
-describes. The package inspection script likewise resolves the CLI from `PATH`, then from uv's
-tool directory; it never treats a nearby checkout or the plugin folder as the installed runtime.
+that absolute path; when `uv` itself is not on `PATH`, look for it at
+`"${XDG_BIN_HOME:-$HOME/.local/bin}/uv"` first. These commands are offline and read no credentials.
+They establish selection and the installed version, not manager readiness; compare the version as
+the CLI preflight describes. The package inspection script likewise resolves the CLI from `PATH`,
+then from uv's tool directory; it never treats a nearby checkout or the plugin folder as the
+installed runtime.
 
 When current install/auth/readiness is the question, use `cloudflare-publish --json doctor`.
 It resolves credentials and contacts Cloudflare account discovery when a token is available.

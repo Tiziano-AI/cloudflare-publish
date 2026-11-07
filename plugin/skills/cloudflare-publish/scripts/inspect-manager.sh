@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only local manager diagnostic. Inputs: PATH, uv's tool bin directory, `cloudflared`
+# Read-only local manager diagnostic. Inputs: PATH, uv and its tool bin directory, `cloudflared`
 # version, native user-service metadata, manager state JSON, and log directory metadata. An optional
 # standalone PATH Python parses allowlisted file contents; otherwise only metadata is reported.
 # Output: human-readable diagnostic text on stdout/stderr. Side effects: none.
@@ -25,17 +25,28 @@ esac
 state_file="$state_dir/state.json"
 printf '== cloudflare-publish CLI ==\n'
 # Locate the installed command without running it. A checkout or the plugin folder is never it.
+# An agent shell's PATH can lack uv's default bin directory, so look there by absolute path too.
+default_bin="${XDG_BIN_HOME:-$HOME/.local/bin}"
 if cli_path="$(command -v cloudflare-publish)"; then
   printf '%s\n' "$cli_path"
   type -ap cloudflare-publish | awk -v selected="$cli_path" '
     $0 != selected && !seen[$0]++ {print "also_on_path=" $0 " (not selected)"}'
-elif command -v uv >/dev/null 2>&1 &&
-  uv_bin="$(uv tool dir --bin 2>/dev/null)" &&
-  [[ -x "$uv_bin/cloudflare-publish" ]]; then
-  printf '%s\n' "$uv_bin/cloudflare-publish"
-  printf 'installed in the uv tool directory but not on PATH; call it by this absolute path\n'
 else
-  printf 'not found on PATH or in the uv tool directory; install the CLI explicitly before operating it\n'
+  uv_cmd="$(command -v uv || true)"
+  if [[ -z "$uv_cmd" && -x "$default_bin/uv" ]]; then
+    uv_cmd="$default_bin/uv"
+    printf 'uv=%s (not on PATH; call it by this absolute path)\n' "$uv_cmd"
+  fi
+  tool_bin="$default_bin"
+  if [[ -n "$uv_cmd" ]] && uv_bin="$("$uv_cmd" tool dir --bin 2>/dev/null)" && [[ -n "$uv_bin" ]]; then
+    tool_bin="$uv_bin"
+  fi
+  if [[ -x "$tool_bin/cloudflare-publish" ]]; then
+    printf '%s\n' "$tool_bin/cloudflare-publish"
+    printf 'installed in the uv tool directory but not on PATH; call it by this absolute path\n'
+  else
+    printf 'not found on PATH or in the uv tool directory; install the CLI explicitly before operating it\n'
+  fi
 fi
 
 printf '\n== cloudflared ==\n'
@@ -95,9 +106,9 @@ if [[ "$platform" == Linux ]]; then
 else
   printf '\n== launch agent ==\n'
   if [[ -f "$service_file" ]]; then
-  launchctl list | awk '$3 == "com.cloudflare-publish.cloudflared" {print}' || true
-  if [[ -n "$parser" ]]; then
-    "$parser" -I -B - "$service_file" "$state_dir/tunnel-token.txt" <<'PY'
+    launchctl list | awk '$3 == "com.cloudflare-publish.cloudflared" {print}' || true
+    if [[ -n "$parser" ]]; then
+      "$parser" -I -B - "$service_file" "$state_dir/tunnel-token.txt" <<'PY'
 from __future__ import annotations
 
 import plistlib
@@ -139,10 +150,10 @@ else:
     print(f"launch_agent_inline_token_present={inline_token}")
     print(f"launch_agent_environment_present={bool(agent.get('EnvironmentVariables'))}")
 PY
-  else
-    printf 'launch_agent_parse=skipped; optional standalone Python unavailable; contents withheld\n'
-    ls -ld "$service_file"
-  fi
+    else
+      printf 'launch_agent_parse=skipped; optional standalone Python unavailable; contents withheld\n'
+      ls -ld "$service_file"
+    fi
   else
     printf 'launch agent missing: %s\n' "$service_file"
   fi

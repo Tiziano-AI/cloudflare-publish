@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
-
 from cloudflare_publish.cli_auth import resolve_api_token
 from cloudflare_publish.cloudflare_api import CloudflareApi
 from cloudflare_publish.cloudflared import Cloudflared
@@ -23,13 +21,15 @@ def run_doctor(
     http: CurlHttpClient,
     explicit_token: str | None,
 ) -> tuple[bool, str, tuple[CheckResult, ...]]:
-    """Collect non-mutating install, auth, local-state, and reachability diagnostics."""
+    """Collect non-mutating install, auth, local-state, and reachability diagnostics.
+
+    Which `cloudflare-publish` or `uv` a shell PATH selects is not readiness: the connector runs
+    `cloudflared`, uv only installs the CLI, and a CLI called by absolute path is just as ready.
+    """
 
     checks: list[CheckResult] = [
         CheckResult("platform is supported", ok=True, detail=paths.host_platform),
         _native_service_preflight(launchd),
-        _which_check("uv"),
-        _which_check("cloudflare-publish"),
         _cloudflared_check(cloudflared),
         CheckResult(
             "state.json exists",
@@ -86,13 +86,6 @@ def _native_service_loaded(service: ConnectorService) -> CheckResult:
         return CheckResult(label, ok=service.is_loaded())
     except AppError as error:
         return CheckResult(label, ok=False, detail=error.message)
-
-
-def _which_check(command: str) -> CheckResult:
-    """Return whether one command is available on PATH."""
-
-    path = shutil.which(command)
-    return CheckResult(f"{command} on PATH", ok=path is not None, detail=path)
 
 
 def _cloudflared_check(cloudflared: Cloudflared) -> CheckResult:

@@ -61,7 +61,7 @@ Installed operation depends on current workstation state. For publication or man
 run the CLI preflight first; then use `cloudflare-publish --json doctor` when install, auth, and
 Cloudflare readiness matter. `doctor` resolves credentials and contacts the account API when a
 token is available. It is not an offline source probe; inspect `data.ready` and `data.checks`, not
-just exit zero or `ok: true`.
+just exit zero or `ok: true`. It does not check `PATH`, so a CLI called by absolute path can be ready.
 
 Local artifact inspection, remote parity, and public-hostname behavior answer different questions.
 Use the inspection script for local manager facts; `verify` and `repair plan` already use credentials,
@@ -99,35 +99,50 @@ uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v0.4.0
 
 Run this preflight before installed operation; explanation and source work do not need it.
 
-1. Select the command with `command -v cloudflare-publish`. If that finds nothing and `uv` is on
-   `PATH`, check `"$(uv tool dir --bin)/cloudflare-publish"`: an executable there is installed,
-   but this shell's `PATH` does not include uv's tool directory yet, so call it by that absolute
-   path. If `type -a cloudflare-publish` lists more than one copy, say which one answers.
+1. Select the command with `command -v cloudflare-publish`. If that finds nothing, find `uv` with
+   `command -v uv`, or else at `"${XDG_BIN_HOME:-$HOME/.local/bin}/uv"`: uv's own installer and its
+   tool links default to that directory, which an agent shell's `PATH` can lack. With `uv` found,
+   check `"$(uv tool dir --bin)/cloudflare-publish"`, calling `uv` by the path you found. An
+   executable there is installed but not on this shell's `PATH` yet, so call it by that absolute
+   path. If `type -a cloudflare-publish` lists more than one copy, say which one answers. The
+   inspection script performs the same lookup.
 2. Read `--version` from the selected command. It prints `cloudflare-publish X.Y.Z`, runs offline
    and reads no credentials. Compare it with `0.4.0`:
    - **Same version**: continue.
    - **Missing, `uv` present**: ask once whether to install the CLI; a request to install or set
-     up the product is already that yes. Run the install command above, then call
-     `"$(uv tool dir --bin)/cloudflare-publish"` until a new shell picks up `PATH`.
-     `uv tool update-shell` edits the user's shell startup files, so suggest it rather than run
-     it. If the install fails because `git` is missing, report `git` as a prerequisite the same
-     way. Installing the CLI does not install `cloudflared`, run setup, read credentials or touch
-     Cloudflare.
+     up the product is already that yes. On macOS, if `command -v git` is `/usr/bin/git`, first
+     run `xcode-select -p`; if that fails, this `git` is Apple's installer stub, so report the
+     Command Line Tools (`xcode-select --install`) as the prerequisite instead of installing.
+     Otherwise run the install command above, with `uv` by the path step 1 found, then call
+     `"$(uv tool dir --bin)/cloudflare-publish"` until a new shell picks up `PATH`, and write that
+     absolute path into every command you hand the user to run themselves, such as interactive
+     setup. `uv tool update-shell` edits the user's shell startup files, so suggest it rather
+     than run it. If the install fails because `git` is missing, report `git` as a prerequisite
+     the same way. Installing the CLI does not install `cloudflared`, run setup, read credentials
+     or touch Cloudflare.
    - **Missing, no `uv`**: report `uv` as the prerequisite, with `git`, which uv uses to fetch the
-     tag: on macOS `brew install uv`, elsewhere the
-     [uv installer](https://docs.astral.sh/uv/getting-started/installation/) or the
-     distribution's package. Do not install `uv` yourself.
-   - **Older**: first check for a pending transition (`pending_transition_present` from the
-     inspection script, or `repair plan`). If one is pending, finish its recovery with the
-     installed version by repeating the exact original request; never swap versions in the middle
-     of a recovery. Otherwise offer the install command above before setup or any apply. It
-     replaces the installed version in place; manager state lives outside the tool environment.
+     tag: on macOS `brew install uv` or the
+     [uv installer](https://docs.astral.sh/uv/getting-started/installation/), elsewhere the uv
+     installer or the distribution's package. Do not install `uv` yourself.
+   - **Older**: first check for a pending transition with the installed CLI's offline
+     `cloudflare-publish --json ls`: a non-null `data.manifest.pending` is one, and a
+     missing-state error means none (the inspection script's `pending_transition_present` also
+     answers when it can parse state). If one is pending, finish its recovery with the installed
+     version by repeating the exact original request; never swap versions in the middle of a
+     recovery. Once nothing is pending, offer the install command above before setup or any
+     apply. It replaces the installed version in place; manager state lives outside the tool
+     environment.
    - **Newer**: never downgrade. Installing the pinned tag would silently replace the newer CLI,
      and an older CLI may not read state that a newer one wrote. Ask the user to update this
      plugin through their host and start a new session; meanwhile prefer the installed CLI's own
      `--help` where it differs from this guidance.
-3. Teardown, recovery and repair always run with the installed CLI, whatever its version. Never
-   install, upgrade or downgrade in order to perform them.
+3. An installed CLI runs teardown, recovery and repair at whatever version it has: never install,
+   upgrade or downgrade it in order to perform them. When no CLI is installed but manager state
+   exists (the inspection script finds `state.json`), teardown and recovery still need one:
+   install the pinned tag as in the missing case, then read the state with its offline
+   `--json ls` before anything else. If it refuses the state as unsupported (an unsupported
+   `schema_version` or pending kind), a newer CLI probably wrote it: stop, report it, and ask the
+   user to update this plugin rather than trying other versions.
 
 Never run the CLI from this plugin's folder or a source checkout, use `uv run` or `uvx` as the
 operator runtime, or run `uv tool install .`.

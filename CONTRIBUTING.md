@@ -40,8 +40,9 @@ The gate runs:
 - `pytest`
 - `uv run cloudflare-publish --help`
 - `uv run python devtools/validate_package.py`
-- `shellcheck` and `shfmt -d` over `plugin/skills/cloudflare-publish/scripts/inspect-manager.sh`,
-  each skipped with a notice when it is not installed locally
+- `shellcheck` and `shfmt -i 2 -d` (two-space indentation) over
+  `plugin/skills/cloudflare-publish/scripts/inspect-manager.sh`, each skipped with a notice when it
+  is not installed locally
 
 Run the working tree's CLI with `uv run cloudflare-publish ...` from the checkout, or
 `uv run --project /path/to/checkout cloudflare-publish ...` from another directory. It is a
@@ -111,16 +112,21 @@ channel: there is no package-index upload, release asset or Homebrew formula.
 
 1. Bump the version in `pyproject.toml`, `plugin/plugin.json`, `plugin/.claude-plugin/plugin.json`
    and the skill's pinned CLI version in `plugin/skills/cloudflare-publish/SKILL.md`, and update
-   every pinned install command (`README.md` and the skill) to the new tag. Run `uv lock` so
-   `uv.lock` records the version. The validator fails until all of them agree.
+   every pinned install command (`README.md` and the skill) to the new tag. The validator fails
+   until those agree with `pyproject.toml`. Run `uv lock` so `uv.lock` records the version too; the
+   validator does not read the lock, and `uv run`, the gate included, rewrites a stale lock instead
+   of failing, so check that the release commit includes `uv.lock`.
 2. Run the gate and commit.
 3. Tag that commit: `git tag -a v<version> -m "cloudflare-publish <version>"`.
 4. Push `main` and the tag: `git push origin main v<version>`. Never move a pushed tag; a fix is a
    new version. Never tag a version string that already named more than one commit, which is why
    0.3.2 has no tag.
 5. Install from the pushed tag into scratch tool directories and read `--version`. Then pin the
-   tagged commit in the marketplace with a `git-subdir` source whose path is `plugin` (`./plugin`
-   in the Codex catalog), and refresh installed plugins through each host.
+   tag's commit in the marketplace with a `git-subdir` source whose path is `plugin` (`./plugin`
+   in the Codex catalog), and refresh installed plugins through each host. Take the sha from
+   `git rev-parse "v<version>^{commit}"`, or the peeled `refs/tags/v<version>^{}` line of
+   `git ls-remote --tags origin`: a plain `git rev-parse v<version>` names the annotated tag
+   object, and both hosts refuse to install a plugin pinned to it.
 
 Package checks need no Cloudflare account and do not establish native host activation, current
 provider behavior, or a first live publication.
@@ -241,6 +247,10 @@ Live verification is manual and requires a supported publishing host plus a real
 ```bash
 uv run cloudflare-publish verify --live
 ```
+
+Running the checkout under test against the real manager this way is development acceptance, and
+it stays with read-only commands such as `verify`, `repair plan` and `service status`. Setup,
+apply, recovery and teardown always run with the installed CLI, never through `uv run`.
 
 ### Linux live acceptance
 

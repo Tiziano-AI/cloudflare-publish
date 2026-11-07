@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import shutil
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -194,6 +197,33 @@ def test_setup_refresh_only_prefers_missing_manager_state_over_tool_checks(
     captured = capsys.readouterr()
     assert "Setup refresh requires existing local manager state." in captured.err
     assert "2026.10.3 or later is required" not in captured.err
+
+
+def test_doctor_is_ready_without_cli_or_uv_on_path(
+    fake_environment: FakeEnvironment,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """A CLI called by its absolute uv tool path, with uv absent, reports a ready manager."""
+
+    assert _setup(fake_environment) == 0
+    _ = capsys.readouterr()
+    # Keep the fake host tools and their interpreter, but no console script and no uv on PATH.
+    interpreter = tmp_path / "interpreter"
+    interpreter.mkdir()
+    (interpreter / "python3").symlink_to(sys.executable)
+    monkeypatch.setenv("PATH", f"{fake_environment.bin_dir}:{interpreter}:/usr/bin:/bin")
+    assert shutil.which("cloudflare-publish") is None
+    assert shutil.which("uv") is None
+
+    assert main(["--json", "--api-token", "token-1", "doctor"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    failing = [check for check in payload["data"]["checks"] if not check["ok"]]
+    assert failing == []
+    assert payload["data"]["ready"] is True
+    assert not any("PATH" in check["label"] for check in payload["data"]["checks"])
 
 
 def test_setup_refresh_only_repairs_existing_manager(
