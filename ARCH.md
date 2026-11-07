@@ -202,10 +202,16 @@ and supported fields first and refuse foreign drift instead of overwriting it.
 ## Source And Distribution Ownership
 
 [Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish) is the single public
-development source for the CLI and native agent plugin. The `tiziano-ai` marketplace catalogs
-reviewed commits from this repository; it is not a second source tree or development engine.
-CLI installation and each host's native plugin installation remain separate consumer selections.
-Neither source publication nor installation configures Cloudflare or changes existing manager state.
+development source for the CLI and native agent plugin. A release is an annotated tag `v<version>`
+on this repository, and that tag is the CLI's only distribution channel:
+`uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v<version>`. There is no
+package-index project, release asset or Homebrew formula. The `tiziano-ai` marketplace pins the
+tagged commit with a `git-subdir` source whose path is `plugin`, so hosts install only the
+skills-only payload; it is not a second source tree or development engine. The skill pins the CLI
+version it was written for, and the package validator binds that pin, both manifests, every pinned
+install command and `pyproject.toml` to one version. CLI installation and each host's native plugin
+installation remain separate consumer selections. Neither source publication nor installation
+configures Cloudflare or changes existing manager state.
 
 ## Product Boundary
 
@@ -921,19 +927,34 @@ package identity and OpenAI listing; `plugin/.claude-plugin/plugin.json`, matchi
 an exact copy of the root `LICENSE`; and `plugin/skills/`. Nothing else belongs there: no CLI,
 executable, hook, MCP server, Python or npm manifest, or source. The manifests' name, version, and
 license agree with `pyproject.toml`. The host discovers the single `skills/` tree; there is no
-second generated copy or product-owned global skill installer. The package needs an executor on the publishing macOS or Linux host;
-it does not promise browser-only execution or execute commands on another host by itself.
+second generated copy or product-owned global skill installer. The package needs an executor on the
+publishing macOS or Linux host; it does not promise browser-only execution or execute commands on
+another host by itself.
 
-The CLI and plugin install independently. `make install-local` installs only the Python CLI with
-`uv tool install --reinstall .`; it does not write a skill directory, run setup, install cloudflared,
-start a native service, or access an account. Plugin installation supplies guidance only. The operator must
-explicitly install the CLI and cloudflared and configure their own account, zone, login method, and
-token before the first publication. No install hook bootstraps services or credentials.
+The CLI and plugin install independently. The release-tag `uv tool install` installs only the
+Python CLI into an isolated tool environment; it does not write a skill directory, run setup,
+install cloudflared, start a native service, or access an account. Installing a different tag
+replaces the installed CLI in place, newer or older, and leaves manager state untouched;
+`uv tool upgrade` only re-resolves the tag already installed. Plugin installation supplies guidance
+only and never contains, installs or runs the CLI by itself.
 
-`devtools/validate_package.py` checks metadata coherence, skill file closure, local Markdown
-references, script syntax/modes, icon signatures, and private workstation dependencies. It does not
-install a package, qualify either host, or contact Cloudflare. The gate also exercises CLI behavior
-with the documented hermetic fake environment.
+The skill's CLI preflight selects the installed command from `PATH`, or from uv's tool directory by
+absolute path until `PATH` includes it, and compares its `--version` with the pinned version. A
+missing CLI is installed from the pinned tag only with the person's consent (a request to install or
+set up is that consent) and only when `uv` is present; a missing `uv` is reported, never installed.
+An older CLI is offered the pinned tag before setup or any apply, except that a pending transition
+is first recovered with the installed version: versions never change mid-recovery. A newer CLI is
+never downgraded, because an older CLI may not read state a newer one wrote; the person updates
+the plugin instead. Teardown, recovery and repair always use the installed CLI. A plugin folder,
+source checkout, `uv run` or `uvx` is never the operator runtime. The operator must explicitly
+configure cloudflared and their own account, zone, login method, and token before the first
+publication. No install hook bootstraps services or credentials.
+
+`devtools/validate_package.py` checks the `plugin/` payload allowlist, metadata coherence, the
+skill's pinned CLI version and every pinned install command against `pyproject.toml`, skill file
+closure, local Markdown references, script syntax/modes, icon signatures, and private workstation
+dependencies. It does not install a package, qualify either host, or contact Cloudflare. The gate
+also exercises CLI behavior with the documented hermetic fake environment.
 
 Disabling or removing the plugin stops host discovery only. `uv tool uninstall cloudflare-publish`
 removes the CLI, not the connector, DNS, Access, tunnel, stored credentials, state, logs, or takeover

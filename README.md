@@ -52,7 +52,8 @@ its scope. See [ARCH.md](ARCH.md) for the full ownership and security contract.
 
 - macOS, or Linux with systemd 240 or later, a working systemd user manager/bus, and
   `Linger=yes` for unattended operation across logout/reboot
-- `uv` and a security-patched Python 3.12 or later (`uv` can manage the Python interpreter)
+- `uv`, which installs the CLI and can manage a security-patched Python 3.12 or later, and `git`,
+  which `uv` uses to fetch the release tag
 - `cloudflared` `2026.10.3` or later on macOS; `2026.10.2` or later on Linux
 - `curl` and `lsof` on `PATH`; `lsof` supplies exact connector-owned listener evidence
 - native OpenSSH client for SSH verification; an independently configured local SSH server and its
@@ -81,24 +82,28 @@ The CLI is standalone; the optional agent plugin teaches Codex and Claude Code h
 They install separately. The plugin requires shell access on the supported publishing host, not a
 browser-only chat or a cloud worker. It includes no Cloudflare account or hosted service.
 
-Clone the public source into a directory you choose, then install the CLI onto `PATH`:
+Install the CLI from its release tag:
 
 ```bash
-git clone https://github.com/Tiziano-AI/cloudflare-publish.git
-cd cloudflare-publish
-uv tool install --reinstall .
+uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v0.4.0
 ```
 
-If you already have a source checkout or an installed plugin package containing `pyproject.toml`,
-run only the final command from that selected root. `uv` creates an isolated CLI environment.
-CLI installation does not install cloudflared, start a connector, read credentials, or configure
-Cloudflare.
+`uv` fetches that tag with `git`, builds it into an isolated tool environment and links
+`cloudflare-publish` into its tool directory, usually `~/.local/bin` (`uv tool dir --bin` prints
+it). If `uv` warns that this directory is not on `PATH`, run `uv tool update-shell` and open a new
+shell. CLI installation does not install cloudflared, start a connector, read credentials, or
+configure Cloudflare.
+
+On macOS, install `uv` with `brew install uv` or the
+[uv installer](https://docs.astral.sh/uv/getting-started/installation/); `git` comes with the
+Xcode Command Line Tools (`xcode-select --install`). To work on the source instead, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 On Linux, the operator installs dependencies through their supported upstream/distribution route;
 the product does not install packages or system services. See [Linux bootstrap](#linux-bootstrap)
 before running setup on a headless host.
 
-Check the selected CLI from outside the source directory, without credentials or network calls:
+Check the installed CLI without credentials or network calls:
 
 ```bash
 command -v cloudflare-publish
@@ -109,8 +114,10 @@ cloudflare-publish --help
 ### Optional agent plugin
 
 Install the guidance through your host's native marketplace. Both the CLI and plugin come from
-[this repository](https://github.com/Tiziano-AI/cloudflare-publish); the `tiziano-ai` marketplace
-selects a reviewed source revision.
+[this repository](https://github.com/Tiziano-AI/cloudflare-publish): the `tiziano-ai` marketplace
+pins a release tag's commit and installs only its `plugin/` directory, which contains no CLI. The
+skill names the CLI version it was written for and offers that version's install command when the
+CLI is missing or older; it never downgrades a newer CLI.
 
 **Codex:**
 
@@ -138,7 +145,7 @@ selected checkout with `claude --plugin-dir /path/to/cloudflare-publish/plugin`;
 persistent native installation. Do not install a second global copy of the same skill alongside
 the plugin.
 
-Ask the agent to plan a private hostname for a local app. It should first discover the CLI, explain
+Ask the agent to plan a private hostname for a local app. It should first check the CLI, explain
 the account and origin requirements, and stop before any setup or publication that you have not
 authorized. Plugin installation itself does not run that workflow.
 
@@ -196,9 +203,18 @@ server, follow [Publish Native SSH](#publish-native-ssh).
 
 ## Upgrade And Removal
 
-Upgrade the CLI explicitly from the selected new source with `uv tool install --reinstall .`; update the
-plugin through the host. Neither action changes account identity or reconciles managed resources.
-Check `cloudflare-publish --version` and the host's selected plugin version independently.
+Upgrade the CLI by installing the new release tag with the same command:
+
+```bash
+uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v<new version>
+```
+
+`uv tool install` replaces the installed CLI with the tag you name, newer or older; manager state
+lives outside the tool environment and stays. `uv tool upgrade cloudflare-publish` does not move to
+a new release: it re-resolves the tag already installed. Finish any interrupted change with the
+version that started it before upgrading. Update the plugin through the host. Neither action
+changes account identity or reconciles managed resources. Check `cloudflare-publish --version`
+and the host's selected plugin version independently.
 
 Removing or disabling the plugin removes its guidance only. The separately installed CLI,
 cloudflared connector, native user service, DNS, tunnel, Access policies, tokens, private credentials, manager
@@ -507,8 +523,8 @@ An uncertain creation is resolved through `repair plan` and exact-resource resol
 ### Linux bootstrap
 
 Run as the intended non-root publishing user on each host, never by copying the Mac manager.
-The operator supplies a security-patched Python 3.12+, `uv`, official `cloudflared` 2026.10.2+,
-`curl`, and `lsof`.
+The operator supplies a security-patched Python 3.12+ (or lets `uv` manage one), `uv`, `git`,
+official `cloudflared` 2026.10.2+, `curl`, and `lsof`.
 Confirm the native user manager before authorizing any Cloudflare creation:
 
 ```bash
@@ -516,7 +532,7 @@ uname -m
 systemctl --version
 systemctl --user show --property=Version --value
 loginctl show-user "$(id -u)" --property=Linger --value
-command -v uv curl cloudflared lsof
+command -v uv git curl cloudflared lsof
 cloudflared --version
 ```
 
@@ -554,8 +570,9 @@ codename. See [Cloudflare downloads](https://developers.cloudflare.com/tunnel/do
 [official package repository](https://pkg.cloudflare.com/index.html). Available ARM64 packages do
 not establish compatibility on either DGX.
 
-Install from the exact reviewed source or native plugin package root with
-`uv tool install --reinstall .`, then check the selected CLI outside that root. Before setup, obtain:
+Install the CLI with the [release-tag command](#install-the-cli-and-plugin) as that user, then
+check it with `command -v cloudflare-publish` and `cloudflare-publish --version`. Before setup,
+obtain:
 
 - the approved Cloudflare account and active full zone, scoped API-token grant, and local terminal
   or strict private-dotenv secret ingress; never send a token in chat

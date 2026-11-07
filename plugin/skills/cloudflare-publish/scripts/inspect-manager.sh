@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only local manager diagnostic. Inputs: PATH, `cloudflared`
+# Read-only local manager diagnostic. Inputs: PATH, uv's tool bin directory, `cloudflared`
 # version, native user-service metadata, manager state JSON, and log directory metadata. An optional
 # standalone PATH Python parses allowlisted file contents; otherwise only metadata is reported.
 # Output: human-readable diagnostic text on stdout/stderr. Side effects: none.
@@ -24,10 +24,18 @@ Linux)
 esac
 state_file="$state_dir/state.json"
 printf '== cloudflare-publish CLI ==\n'
+# Locate the installed command without running it. A checkout or the plugin folder is never it.
 if cli_path="$(command -v cloudflare-publish)"; then
   printf '%s\n' "$cli_path"
+  type -ap cloudflare-publish | awk -v selected="$cli_path" '
+    $0 != selected && !seen[$0]++ {print "also_on_path=" $0 " (not selected)"}'
+elif command -v uv >/dev/null 2>&1 &&
+  uv_bin="$(uv tool dir --bin 2>/dev/null)" &&
+  [[ -x "$uv_bin/cloudflare-publish" ]]; then
+  printf '%s\n' "$uv_bin/cloudflare-publish"
+  printf 'installed in the uv tool directory but not on PATH; call it by this absolute path\n'
 else
-  printf 'not found on PATH; install the CLI explicitly before operating it\n'
+  printf 'not found on PATH or in the uv tool directory; install the CLI explicitly before operating it\n'
 fi
 
 printf '\n== cloudflared ==\n'

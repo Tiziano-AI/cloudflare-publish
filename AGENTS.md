@@ -118,9 +118,16 @@ hardware qualification or an architecture restriction. The operator supplies mat
   `uv run --project <checkout> cloudflare-publish ...` from elsewhere so relative paths keep the
   caller's directory. That is a development surface, never the operator runtime, and there is no
   repository wrapper script.
-- `make install-local` reinstalls only the CLI with `uv tool install --reinstall .`. Run it only
-  when installation is in scope. The host separately owns plugin installation, discovery and
-  removal; there is no global skill copier, install hook, timer, watcher or unattended sync.
+- The CLI has one distribution channel: an annotated release tag `v<version>`, installed with
+  `uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v<version>`. There is no
+  package-index upload, release asset, Homebrew formula or repository install target. Install only
+  when installation is in scope, and only into scratch `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` when testing
+  a candidate. The host separately owns plugin installation, discovery and removal; there is no
+  global skill copier, install hook, timer, watcher or unattended sync.
+- A release bumps `pyproject.toml`, `uv.lock`, both manifests, the skill's pinned CLI version and
+  the pinned install commands together, passes the gate, and is committed, tagged and pushed with
+  `main`; the marketplace then pins the tagged commit with a `git-subdir` source at path `plugin`.
+  CONTRIBUTING.md's Releases section owns the steps.
 - `make validate-package` checks the source package offline. After a CLI installation, smoke-test
   from outside the checkout with `command -v cloudflare-publish`, `cloudflare-publish --version`
   and `cloudflare-publish --help`. Add `cloudflare-publish --json doctor` only when auth and manager
@@ -134,9 +141,14 @@ hardware qualification or an architecture restriction. The operator supplies mat
   expose a duplicate. Do not install a second global skill beside the native plugin.
 - The package is a portable skills-only plugin. `devtools/validate_package.py`, which the gate
   runs, checks that `plugin/` holds only its manifests, `LICENSE` and `skills/`, identity
-  coherence, skill file/link closure, scripts, icons and private workstation dependencies. It does
-  not prove host activation or live operations. Review routing changes
-  against `devtools/skill-review-scenarios.md`.
+  coherence, that the skill's pinned CLI version and every pinned install command match
+  `pyproject.toml`, skill file/link closure, scripts, icons and private workstation dependencies.
+  It does not prove host activation or live operations. Review routing changes against
+  `devtools/skill-review-scenarios.md`.
+- The skill's CLI preflight owns installed-command selection and version handling: install a
+  missing CLI with consent, offer the pinned tag to an older one unless a pending transition must
+  first be recovered with the installed version, never downgrade a newer one, and never run the
+  CLI from the plugin folder, a checkout, `uv run` or `uvx`.
 - Workstation paths and secret configuration belong to machine configuration, not to the package.
   Removing the plugin or CLI must not implicitly retire infrastructure or erase recovery state;
   README.md's Upgrade And Removal section owns the operator sequence.

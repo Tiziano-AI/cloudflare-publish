@@ -44,10 +44,15 @@ REQUIRED_SKILL_FILES = (
     "assets/icon-small.svg",
     "assets/icon-large.png",
 )
+SKILL_PIN = re.compile(r"written for CLI version `([^`]+)`")
+# Placeholders such as `@v<version>` do not start with a digit and are not release pins.
+INSTALL_SPEC = re.compile(
+    r"git\+https://github\.com/Tiziano-AI/cloudflare-publish@v(\d[^\s`'\")\]]*)"
+)
 
 
 def validate_package(root: Path) -> None:
-    """Validate payload closure and coherent metadata, not host activation or Cloudflare."""
+    """Validate payload closure and coherent versions, not host activation or Cloudflare."""
 
     project = cast(
         dict[str, object],
@@ -96,6 +101,7 @@ def validate_package(root: Path) -> None:
         raise ValueError("package must contain exactly the cloudflare-publish skill")
     skill = skills / "cloudflare-publish"
     validate_skill(skill)
+    _validate_cli_pin(root, skill, str(project["version"]))
 
 
 def _validate_payload(plugin: Path) -> None:
@@ -121,6 +127,29 @@ def _validate_payload(plugin: Path) -> None:
             raise ValueError(f"plugin manifest must be a regular file: {path.name}")
     if (plugin / "LICENSE").is_symlink() or not (plugin / "LICENSE").is_file():
         raise ValueError("plugin/LICENSE must be a regular file")
+
+
+def _validate_cli_pin(root: Path, skill: Path, version: str) -> None:
+    """Bind the skill's CLI pin and every pinned install command to the package version."""
+
+    skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
+    pins = [match.group(1) for match in SKILL_PIN.finditer(skill_text)]
+    if len(pins) != 1:
+        raise ValueError("SKILL.md must state exactly one pinned CLI version")
+    if pins[0] != version:
+        raise ValueError(f"SKILL.md pins CLI {pins[0]} but pyproject.toml is {version}")
+    for required in (skill / "SKILL.md", root / "README.md"):
+        if not INSTALL_SPEC.search(required.read_text(encoding="utf-8")):
+            raise ValueError(f"pinned install command is missing from {required.name}")
+    sources = [path for path in sorted(skill.rglob("*")) if path.suffix in {".md", ".sh", ".yaml"}]
+    sources.extend(sorted(root.glob("*.md")))
+    for path in sources:
+        for match in INSTALL_SPEC.finditer(path.read_text(encoding="utf-8")):
+            pinned = match.group(1)
+            if pinned != version:
+                raise ValueError(
+                    f"install command in {path.name} pins v{pinned}, expected v{version}"
+                )
 
 
 def validate_skill(root: Path) -> None:

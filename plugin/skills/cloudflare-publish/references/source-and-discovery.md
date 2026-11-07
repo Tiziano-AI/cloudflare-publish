@@ -2,18 +2,23 @@
 
 ## Runtime posture
 
-- The operator path is the PATH-global `cloudflare-publish` command.
-- If the CLI is not on `PATH`, report the installed-runtime blocker. The plugin supplies guidance
-  only. With authorization for installation, resolve the actual source or native plugin package
-  root, then run `uv tool install --reinstall .` there; it contains `pyproject.toml` and the runtime source. Do
-  not guess a personal checkout path or run setup as an installation side effect. This blocks
-  installed operation, not explanation or work in a resolved source checkout.
+- The operator runtime is the separately installed `cloudflare-publish` command: the one on
+  `PATH`, or `"$(uv tool dir --bin)/cloudflare-publish"` until `PATH` includes uv's tool
+  directory.
+- Its one channel is a GitHub release tag, installed with
+  `uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v0.4.0` for the version
+  this skill pins. The [CLI preflight](../SKILL.md#cli-preflight) owns selection, the version
+  comparison, and when to install, offer an upgrade, or refuse to downgrade.
+- This plugin contains no CLI or runtime source. Never run the CLI from the plugin folder or a
+  source checkout, use `uv run` or `uvx` as the operator runtime, or run setup as an installation
+  side effect. A missing CLI blocks installed operation, not explanation or work in a resolved
+  source checkout.
 
 The single public development and release source for the CLI and plugin is
 [Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish).
-The `tiziano-ai` marketplace pins reviewed commits from this complete source. Native plugin
-installation and CLI installation are separate. A local Claude `--plugin-dir` session does not
-establish persistent native installation or migration.
+The `tiziano-ai` marketplace pins a release tag's commit and installs only its `plugin/`
+directory. Native plugin installation and CLI installation are separate. A local Claude
+`--plugin-dir` session does not establish persistent native installation or migration.
 
 ## Source and explanation
 
@@ -24,17 +29,20 @@ installed to be read or changed.
 
 ## First discovery sequence
 
-For installed operation, check whether the CLI is globally installed:
+For installed operation, check which CLI is installed and selected:
 
 ```bash
 command -v cloudflare-publish
+type -a cloudflare-publish
 cloudflare-publish --version
 cloudflare-publish --help
 ```
 
-These commands are offline and read no credentials. They establish selection and the installed
-version, not manager readiness. The package inspection script likewise resolves the CLI only from
-PATH; it never treats a nearby checkout or a command outside PATH as the installed runtime.
+If `command -v` finds nothing, check `"$(uv tool dir --bin)/cloudflare-publish"` and call it by
+that absolute path. These commands are offline and read no credentials. They establish selection
+and the installed version, not manager readiness; compare the version as the CLI preflight
+describes. The package inspection script likewise resolves the CLI from `PATH`, then from uv's
+tool directory; it never treats a nearby checkout or the plugin folder as the installed runtime.
 
 When current install/auth/readiness is the question, use `cloudflare-publish --json doctor`.
 It resolves credentials and contacts Cloudflare account discovery when a token is available.
@@ -72,8 +80,8 @@ working user bus and operator-enabled lingering; the product never repairs these
 
 - If local manager state is in scope, continue to inspect its runtime artifacts; these do not
   establish remote parity or public-hostname behavior.
-- Do not invent a repository path, install from an assumed checkout, or claim
-  the command is operational.
+- Do not invent a repository path, install from a checkout or the plugin folder, or claim the
+  command is operational. Installation goes through the CLI preflight.
 
 ## Discovery without manager state
 
@@ -113,5 +121,5 @@ application dependencies or uninspected account topology.
 - user unit: `~/.config/systemd/user/cloudflare-publish.service`
 
 These are host-owned surfaces, not a portable manager bundle. Each independent host/profile must
-create a distinct remotely managed tunnel. Installation from a reviewed source and a hermetic gate
-do not establish live Linux acceptance, authorize an endpoint, or configure an origin application.
+create a distinct remotely managed tunnel. Installing a release and a hermetic gate do not
+establish live Linux acceptance, authorize an endpoint, or configure an origin application.

@@ -6,12 +6,15 @@ import json
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = REPO_ROOT / "devtools" / "validate_package.py"
+VERSION = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["version"]
+INSTALL = f"git+https://github.com/Tiziano-AI/cloudflare-publish@v{VERSION}"
 SOURCE_ROOT = REPO_ROOT / "plugin" / "skills" / "cloudflare-publish"
 
 
@@ -58,6 +61,52 @@ def test_package_rejects_version_drift(tmp_path: Path) -> None:
     completed = _validate(package)
     assert completed.returncode == 1
     assert "version" in completed.stderr
+
+
+def test_skill_pins_the_package_version(tmp_path: Path) -> None:
+    """The skill's preflight compares the CLI with the version this package releases."""
+
+    package = _copy_package(tmp_path / "package")
+    skill = package / "plugin" / "skills" / "cloudflare-publish" / "SKILL.md"
+    pin = f"written for CLI version `{VERSION}`"
+    assert pin in skill.read_text()
+    skill.write_text(skill.read_text().replace(pin, "written for CLI version `9.9.9`"))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert f"SKILL.md pins CLI 9.9.9 but pyproject.toml is {VERSION}" in completed.stderr
+
+
+def test_skill_states_one_pin(tmp_path: Path) -> None:
+    """Two pins would leave the preflight comparing against an ambiguous version."""
+
+    package = _copy_package(tmp_path / "package")
+    skill = package / "plugin" / "skills" / "cloudflare-publish" / "SKILL.md"
+    skill.write_text(skill.read_text() + f"\nAlso written for CLI version `{VERSION}`.\n")
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "exactly one pinned CLI version" in completed.stderr
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "README.md",
+        "plugin/skills/cloudflare-publish/SKILL.md",
+        "plugin/skills/cloudflare-publish/references/source-and-discovery.md",
+        "plugin/skills/cloudflare-publish/references/product-contract.md",
+    ],
+)
+def test_install_commands_pin_the_package_version(tmp_path: Path, relative: str) -> None:
+    """A stale release tag in any install command would install a CLI the skill does not expect."""
+
+    package = _copy_package(tmp_path / "package")
+    document = package / relative
+    assert INSTALL in document.read_text()
+    stale = "git+https://github.com/Tiziano-AI/cloudflare-publish@v0.3.2"
+    document.write_text(document.read_text().replace(INSTALL, stale))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert f"pins v0.3.2, expected v{VERSION}" in completed.stderr
 
 
 def test_package_requires_native_listing_icon(tmp_path: Path) -> None:
@@ -187,20 +236,6 @@ def test_plugin_license_matches_root_license(tmp_path: Path) -> None:
     assert "exact copy of the root LICENSE" in completed.stderr
 
 
-def test_cli_installer_does_not_write_global_skills() -> None:
-    """The CLI-only recipe must leave plugin ownership with the native host."""
-
-    completed = subprocess.run(
-        ["make", "-n", "install-local"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    assert completed.returncode == 0
-    assert completed.stdout.strip() == "uv tool install --reinstall ."
-
-
 def test_diagnostic_resolves_only_path_not_nearby_checkout(tmp_path: Path) -> None:
     """A checkout's development environment is not an installed command beside the skill."""
 
@@ -239,6 +274,55 @@ def test_diagnostic_reports_actual_path_command(tmp_path: Path) -> None:
     )
     assert completed.returncode == 0
     assert str(command) in completed.stdout
+
+
+def _fake_cli(directory: Path) -> Path:
+    directory.mkdir(parents=True)
+    command = directory / "cloudflare-publish"
+    command.write_text("#!/bin/sh\nexit 99\n")
+    command.chmod(0o755)
+    return command
+
+
+def _inspect(tmp_path: Path, path_entries: list[Path]) -> subprocess.CompletedProcess[str]:
+    user_dir = tmp_path / "user"
+    user_dir.mkdir()
+    return subprocess.run(
+        ["bash", str(SOURCE_ROOT / "scripts" / "inspect-manager.sh")],
+        capture_output=True,
+        check=False,
+        cwd=tmp_path,
+        env={"HOME": str(user_dir), "PATH": ":".join([*map(str, path_entries), "/usr/bin:/bin"])},
+        text=True,
+    )
+
+
+def test_diagnostic_falls_back_to_uv_tool_directory(tmp_path: Path) -> None:
+    """A fresh uv install is found by absolute path before the shell's PATH includes it."""
+
+    installed = _fake_cli(tmp_path / "uv-tools" / "bin")
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    uv = tools / "uv"
+    uv.write_text(
+        f'#!/bin/sh\n[ "$*" = "tool dir --bin" ] || exit 2\nprintf "%s\\n" "{installed.parent}"\n'
+    )
+    uv.chmod(0o755)
+    completed = _inspect(tmp_path, [tools])
+    assert completed.returncode == 0, completed.stderr
+    assert f"{installed}\n" in completed.stdout
+    assert "not on PATH; call it by this absolute path" in completed.stdout
+
+
+def test_diagnostic_names_shadowed_path_copies(tmp_path: Path) -> None:
+    """The first PATH copy answers; a later copy, such as a stale plugin cache, is named."""
+
+    selected = _fake_cli(tmp_path / "first")
+    shadowed = _fake_cli(tmp_path / "second")
+    completed = _inspect(tmp_path, [selected.parent, shadowed.parent, selected.parent])
+    assert completed.returncode == 0, completed.stderr
+    assert f"{selected}\nalso_on_path={shadowed} (not selected)\n" in completed.stdout
+    assert completed.stdout.count("also_on_path=") == 1
 
 
 def test_diagnostic_outputs_no_secret_publication_contract(tmp_path: Path) -> None:

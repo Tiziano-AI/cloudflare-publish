@@ -9,10 +9,10 @@ in the operator's own Cloudflare account and active full DNS zone. One distinct 
 per host/user profile carries that host's publications. Protected audiences use Cloudflare Access; `public` omits Access only
 when the origin already enforces fail-closed request authentication.
 
-This plugin supplies guidance, not an account or a running service. It installs no CLI, credentials,
-connector, DNS records, or Access policies automatically. Discover the separately installed
-`cloudflare-publish` command before operating it; see Source And Discovery for explicit setup.
-Disabling or removing the plugin leaves the CLI, connector, publications, and credentials in place.
+This plugin supplies guidance, not an account or a running service. It contains no CLI and
+installs nothing automatically: no CLI, credentials, connector, DNS records, or Access policies.
+Run the [CLI preflight](#cli-preflight) before installed operation. Disabling or removing the
+plugin leaves the CLI, connector, publications, and credentials in place.
 
 For interrupted writes, start with `repair plan`. Never erase pending state or blindly repeat a
 resource creation whose result is unknown; follow [Interrupted writes](#interrupted-writes).
@@ -58,10 +58,10 @@ or credentials do not block that work and are not a reason to install, run `doct
 the live manager.
 
 Installed operation depends on current workstation state. For publication or manager diagnosis,
-resolve the PATH-global command with `command -v cloudflare-publish`; use
-`cloudflare-publish --json doctor` when install, auth, and Cloudflare readiness matter. `doctor`
-resolves credentials and contacts the account API when a token is available. It is not an offline
-source probe; inspect `data.ready` and `data.checks`, not just exit zero or `ok: true`.
+run the CLI preflight first; then use `cloudflare-publish --json doctor` when install, auth, and
+Cloudflare readiness matter. `doctor` resolves credentials and contacts the account API when a
+token is available. It is not an offline source probe; inspect `data.ready` and `data.checks`, not
+just exit zero or `ok: true`.
 
 Local artifact inspection, remote parity, and public-hostname behavior answer different questions.
 Use the inspection script for local manager facts; `verify` and `repair plan` already use credentials,
@@ -87,6 +87,50 @@ Public SSH verification first requires exact machine policy parity, the applicat
 `service_auth_401_redirect: true` (HTTP 401 on Service Auth denial), and anonymous HTTP 401/403.
 A login redirect fails SSH preflight instead of opening a browser. Keep client cloudflared at
 `--loglevel error` to prevent debug WebSocket logging from exposing Access headers.
+
+## CLI preflight
+
+This skill is written for CLI version `0.4.0`. The CLI installs separately from this plugin, from
+its release tag, with one command:
+
+```bash
+uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v0.4.0
+```
+
+Run this preflight before installed operation; explanation and source work do not need it.
+
+1. Select the command with `command -v cloudflare-publish`. If that finds nothing and `uv` is on
+   `PATH`, check `"$(uv tool dir --bin)/cloudflare-publish"`: an executable there is installed,
+   but this shell's `PATH` does not include uv's tool directory yet, so call it by that absolute
+   path. If `type -a cloudflare-publish` lists more than one copy, say which one answers.
+2. Read `--version` from the selected command. It prints `cloudflare-publish X.Y.Z`, runs offline
+   and reads no credentials. Compare it with `0.4.0`:
+   - **Same version**: continue.
+   - **Missing, `uv` present**: ask once whether to install the CLI; a request to install or set
+     up the product is already that yes. Run the install command above, then call
+     `"$(uv tool dir --bin)/cloudflare-publish"` until a new shell picks up `PATH`.
+     `uv tool update-shell` edits the user's shell startup files, so suggest it rather than run
+     it. If the install fails because `git` is missing, report `git` as a prerequisite the same
+     way. Installing the CLI does not install `cloudflared`, run setup, read credentials or touch
+     Cloudflare.
+   - **Missing, no `uv`**: report `uv` as the prerequisite, with `git`, which uv uses to fetch the
+     tag: on macOS `brew install uv`, elsewhere the
+     [uv installer](https://docs.astral.sh/uv/getting-started/installation/) or the
+     distribution's package. Do not install `uv` yourself.
+   - **Older**: first check for a pending transition (`pending_transition_present` from the
+     inspection script, or `repair plan`). If one is pending, finish its recovery with the
+     installed version by repeating the exact original request; never swap versions in the middle
+     of a recovery. Otherwise offer the install command above before setup or any apply. It
+     replaces the installed version in place; manager state lives outside the tool environment.
+   - **Newer**: never downgrade. Installing the pinned tag would silently replace the newer CLI,
+     and an older CLI may not read state that a newer one wrote. Ask the user to update this
+     plugin through their host and start a new session; meanwhile prefer the installed CLI's own
+     `--help` where it differs from this guidance.
+3. Teardown, recovery and repair always run with the installed CLI, whatever its version. Never
+   install, upgrade or downgrade in order to perform them.
+
+Never run the CLI from this plugin's folder or a source checkout, use `uv run` or `uvx` as the
+operator runtime, or run `uv tool install .`.
 
 ## Installed operation
 

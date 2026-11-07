@@ -19,11 +19,14 @@ deploy application code into Cloudflare compute.
 - operator CLI: PATH-global `cloudflare-publish`
 - development: `uv run cloudflare-publish` from the checked-out product repository, never the
   operator runtime
-- install posture: the host owns this skill-only plugin; install the CLI separately with
-  `uv tool install --reinstall .` from an explicitly resolved source or plugin package root. Installing the
-  plugin does not install the CLI, cloudflared, credentials, services, or Cloudflare resources.
-  Removing it does not retire those independently owned resources; use deliberate CLI teardown
-  before uninstalling the CLI if complete manager retirement is intended.
+- install posture: the host owns this skills-only plugin, which contains no CLI. The CLI installs
+  separately from its release tag with
+  `uv tool install git+https://github.com/Tiziano-AI/cloudflare-publish@v0.4.0`, the version this
+  skill pins; the CLI preflight in `SKILL.md` decides when to install or offer an upgrade and
+  never downgrades. Installing the plugin does not install the CLI, cloudflared, credentials,
+  services, or Cloudflare resources. Removing it does not retire those independently owned
+  resources; use deliberate CLI teardown before uninstalling the CLI if complete manager
+  retirement is intended.
 - macOS manager state:
   - `~/Library/Application Support/cloudflare-publish/state.json`
   - `~/Library/Application Support/cloudflare-publish/manager.lock`
@@ -175,7 +178,8 @@ only in ignored operator overlays.
 
 ## Discovery law
 
-- For installed operation, prefer the PATH-global `cloudflare-publish` CLI.
+- For installed operation, use the installed `cloudflare-publish` CLI that the CLI preflight
+  selects, never a checkout or the plugin folder.
 - Use `cloudflare-publish --json doctor` for install/auth/readiness diagnosis. It resolves
   credentials and queries the account API when a token is available; it is not an offline probe.
 - Use `discover accounts`, `discover zone`, `discover zones`, `discover tunnels`, and
@@ -202,8 +206,8 @@ only in ignored operator overlays.
 - It does not print service-token client secrets.
 - Product explanation and source edits use the resolved source owner; neither requires an
   installed CLI, credentials, nor live manager discovery.
-- A missing PATH command blocks installed CLI operation, not source work. Route a needed
-  installation to the product owner; do not install as a prerequisite to reading or editing source.
+- A missing CLI blocks installed operation, not source work. Install it only through the CLI
+  preflight, never as a prerequisite to reading or editing source.
 - An unresolved checkout blocks source edits until the owner is found. Inspect runtime artifacts
   independently only when current manager facts are part of the request.
 

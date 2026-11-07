@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cloudflare-publish",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Publish local web apps, APIs, or machine-only SSH from macOS or Linux through Cloudflare Tunnel.",
   "author": {
     "name": "Tiziano AI",

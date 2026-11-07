@@ -2,10 +2,13 @@
 
 ## Canonical Commands
 
-Prepare the development dependencies explicitly from repository root. Use npm 11 or later and a
-patched Node runtime: 24.22.1 or later on the 24.x line, or 26.12.1 or later on the 26.x line.
+Clone the public source into a directory you choose and prepare the development dependencies
+explicitly from its root. Use npm 11 or later and a patched Node runtime: 24.22.1 or later on the
+24.x line, or 26.12.1 or later on the 26.x line.
 
 ```bash
+git clone https://github.com/Tiziano-AI/cloudflare-publish.git
+cd cloudflare-publish
 uv sync --group dev
 npm ci --include=dev
 ```
@@ -51,21 +54,25 @@ Validate the plugin metadata and complete skill tree when the package changes:
 uv run python devtools/validate_package.py
 ```
 
-Install the accepted CLI explicitly, only when installation is in scope:
+Operators install the CLI only from a release tag (see Releases below); the repository has no
+install target. The host owns plugin installation and removal. Do not add a global skill copier,
+install hook, approval bypass, or automatic setup step. To test a candidate without changing an
+installed consumer, install a committed revision through the same git route into scratch tool
+directories, and exercise `--version`, `--help`, and a local read from outside the checkout with
+an empty temporary user directory:
 
 ```bash
-make install-local
+UV_TOOL_DIR="$scratch/tools" UV_TOOL_BIN_DIR="$scratch/bin" \
+  uv tool install "git+file://$PWD@$(git rev-parse HEAD)"
+"$scratch/bin/cloudflare-publish" --version
 ```
 
-The host owns plugin installation and removal. Do not add a global skill copier, install hook,
-approval bypass, or automatic setup step. To test packaging without changing an installed consumer,
-build a wheel with `uv build`, install it into an isolated tool directory, and exercise `--version`,
-`--help`, and a local read from outside the checkout with an empty temporary user directory. This
-checks the built CLI, not live Cloudflare or native plugin activation.
+This checks the built CLI, not live Cloudflare or native plugin activation.
 
-Check both distribution forms. The wheel owns the standard-library-only Python CLI runtime; Node,
-npm and basedpyright are not operator dependencies. `MANIFEST.in` keeps the source distribution
-complete with developer contracts, native plugin manifests, skill assets, both dependency manifests
+Check both distribution forms with `uv build --out-dir "$scratch/dist"`. The wheel owns the
+standard-library-only Python CLI runtime; Node, npm and basedpyright are not operator dependencies,
+and neither the wheel nor the plugin carries a wrapper script. `MANIFEST.in` keeps the source
+distribution complete with developer contracts, the `plugin/` payload, both dependency manifests
 and lockfiles, `.npmrc`, gate, tests, `conftest.py`, and fake-binary helpers, but no installed
 `node_modules`. Extract the source distribution outside the checkout, prepare its development
 dependencies there, and run its complete gate. Verify that imports select the extracted source.
@@ -87,20 +94,36 @@ distribution closure.
 ## Public Source And Releases
 
 [Tiziano-AI/cloudflare-publish](https://github.com/Tiziano-AI/cloudflare-publish) is the single public
-development repository and complete installable plugin source. Make product changes here, not in a
-private mirror or a distribution checkout. The separate `tiziano-ai` marketplace is a thin catalog
-that pins reviewed source commits; it contains no copied runtime or skill tree.
+development repository and the source of both the CLI and the plugin. Make product changes here,
+not in a private mirror or a distribution checkout. The separate `tiziano-ai` marketplace is a thin
+catalog that pins a release commit and installs its `plugin/` subdirectory; it contains no copied
+runtime or skill tree.
 
-Keep the MIT license, source, tests, contracts, native plugin manifests, skill assets and lockfile
-together. Review the complete outgoing changes and public metadata URLs before publication. Ignoring
-operator overlays, environments, credentials, state and build outputs does not make newly tracked
-content safe. Do not import the earlier private development history into this public repository.
+Keep the MIT license, source, tests, contracts, the `plugin/` payload and lockfile together. Review
+the complete outgoing changes and public metadata URLs before publication. Ignoring operator
+overlays, environments, credentials, state and build outputs does not make newly tracked content
+safe. Do not import the earlier private development history into this public repository.
 
-Keep the version in `pyproject.toml`, `uv.lock`, `plugin/plugin.json` and
-`plugin/.claude-plugin/plugin.json` aligned. After the accepted source commit is public, update the catalog's exact source revision and
-use native host operations to refresh installed plugins. CLI installation remains explicit and
-separate. Package checks need no Cloudflare account and do not establish native host activation,
-current provider behavior, or a first live publication.
+### Releases
+
+A release is an annotated tag `v<version>` on `main`, and that tag is the CLI's only distribution
+channel: there is no package-index upload, release asset or Homebrew formula.
+
+1. Bump the version in `pyproject.toml`, `plugin/plugin.json`, `plugin/.claude-plugin/plugin.json`
+   and the skill's pinned CLI version in `plugin/skills/cloudflare-publish/SKILL.md`, and update
+   every pinned install command (`README.md` and the skill) to the new tag. Run `uv lock` so
+   `uv.lock` records the version. The validator fails until all of them agree.
+2. Run the gate and commit.
+3. Tag that commit: `git tag -a v<version> -m "cloudflare-publish <version>"`.
+4. Push `main` and the tag: `git push origin main v<version>`. Never move a pushed tag; a fix is a
+   new version. Never tag a version string that already named more than one commit, which is why
+   0.3.2 has no tag.
+5. Install from the pushed tag into scratch tool directories and read `--version`. Then pin the
+   tagged commit in the marketplace with a `git-subdir` source whose path is `plugin` (`./plugin`
+   in the Codex catalog), and refresh installed plugins through each host.
+
+Package checks need no Cloudflare account and do not establish native host activation, current
+provider behavior, or a first live publication.
 
 ## Icon Assets
 
