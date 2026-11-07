@@ -26,9 +26,10 @@ with `--token-file`; paths that start it also require the eMudhra security minim
 - `README.md` owns operator guidance: installation, API-token shape, commands and troubleshooting.
 - `CONTRIBUTING.md` lists what the gate runs, the test strategy, the dependency-lock policy, and the
   surfaces to re-check when behavior changes.
-- `skills/cloudflare-publish/` is the single native plugin skill source.
-- `plugin.json` and `.claude-plugin/plugin.json` own package identity; keep name, version and license
-  aligned with `pyproject.toml`.
+- `plugin/` is the skills-only plugin payload that hosts install: `plugin/plugin.json`,
+  `plugin/.claude-plugin/plugin.json`, a copy of `LICENSE`, and `plugin/skills/cloudflare-publish/`,
+  the single native plugin skill source. The manifests own package identity; keep name, version
+  and license aligned with `pyproject.toml`.
 - Put durable product decisions in their owning contract or manual. Save a continuation note only
   for unfinished work that needs one, and remove it when resolved; do not retain completed-work
   journals or empty handoff placeholders.
@@ -106,7 +107,7 @@ hardware qualification or an architecture restriction. The operator supplies mat
   Required Surface Sync and Change Checklist name the files to re-check.
 - Explaining the product or changing its source needs no installed CLI, credentials or manager
   inspection, so do not install or run `doctor` to prepare that work.
-  `skills/cloudflare-publish/references/source-and-discovery.md` separates source ownership,
+  `plugin/skills/cloudflare-publish/references/source-and-discovery.md` separates source ownership,
   installed-command discovery and the live evidence a particular claim needs.
 
 ## Entry points and installation
@@ -125,13 +126,14 @@ hardware qualification or an architecture restriction. The operator supplies mat
 
 ## Skill package
 
-- `skills/cloudflare-publish/` is the only skill source. It deliberately lives outside
+- `plugin/skills/cloudflare-publish/` is the only skill source. It deliberately lives outside
   `.agents/skills`: Codex loads repository skills from `.agents/skills` as well as user skills from
   `$HOME/.agents/skills` and does not merge packages with the same name, so a copy there would
   expose a duplicate. Do not install a second global skill beside the native plugin.
-- The package is a portable skill-only plugin. `devtools/validate_package.py`, which the gate
-  runs, checks identity coherence, skill file/link closure, scripts, icons and private workstation
-  dependencies. It does not prove host activation or live operations. Review routing changes
+- The package is a portable skills-only plugin. `devtools/validate_package.py`, which the gate
+  runs, checks that `plugin/` holds only its manifests, `LICENSE` and `skills/`, identity
+  coherence, skill file/link closure, scripts, icons and private workstation dependencies. It does
+  not prove host activation or live operations. Review routing changes
   against `devtools/skill-review-scenarios.md`.
 - Workstation paths and secret configuration belong to machine configuration, not to the package.
   Removing the plugin or CLI must not implicitly retire infrastructure or erase recovery state;

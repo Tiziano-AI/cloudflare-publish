@@ -1,4 +1,4 @@
-<img src="skills/cloudflare-publish/assets/icon-large.png" width="72" height="72" alt="">
+<img src="plugin/skills/cloudflare-publish/assets/icon-large.png" width="72" height="72" alt="">
 
 # Cloudflare Publish
 
@@ -133,9 +133,10 @@ Check the installed version and enablement with `codex plugin list --json` or
 `claude plugin list --json`. Start a new host session to load newly installed guidance; an existing
 session may retain its earlier skill catalog.
 
-For a local development preview, Claude Code can load an explicitly selected checkout with
-`claude --plugin-dir /path/to/cloudflare-publish`; that is not a persistent native installation.
-Do not install a second global copy of the same skill alongside the plugin.
+For a local development preview, Claude Code can load the plugin directory of an explicitly
+selected checkout with `claude --plugin-dir /path/to/cloudflare-publish/plugin`; that is not a
+persistent native installation. Do not install a second global copy of the same skill alongside
+the plugin.
 
 Ask the agent to plan a private hostname for a local app. It should first discover the CLI, explain
 the account and origin requirements, and stop before any setup or publication that you have not
@@ -259,7 +260,7 @@ Resource scope:
 
 The organization permission covers the product's organization reads and guard update; an
 additional broad `Zero Trust Edit` permission is not required by those documented endpoints.
-See the [permission reference](skills/cloudflare-publish/references/cloudflare-api-and-permissions.md)
+See the [permission reference](plugin/skills/cloudflare-publish/references/cloudflare-api-and-permissions.md)
 for the official endpoint contracts.
 
 The CLI resolves the API token in this order:
@@ -573,7 +574,7 @@ If it cannot, use `public` only after Internet exposure is approved and the appl
 fail-closed HTTPS and WSS authorization. Use the actual sensitive path and denial status from the
 installed application, not an invented API path or a green health check. Each backend publishes
 directly from its own host; inference stays there. See the
-[native-client recipe](skills/cloudflare-publish/references/operator-recipes.md#native-clients-with-origin-owned-authentication).
+[native-client recipe](plugin/skills/cloudflare-publish/references/operator-recipes.md#native-clients-with-origin-owned-authentication).
 
 ## Connector Service Lifecycle
 
@@ -698,7 +699,7 @@ checkout matches its runtime. Check authenticated HTTPS and, when used, WebSocke
 the hostname using the intended native transport where practical; that proves transport, not actual
 device pairing or application use. Application pairing and session credentials stay with their owner
 and out of tracked files. The skill's
-[native-client recipe](skills/cloudflare-publish/references/operator-recipes.md#native-clients-with-origin-owned-authentication)
+[native-client recipe](plugin/skills/cloudflare-publish/references/operator-recipes.md#native-clients-with-origin-owned-authentication)
 also covers temporary credential cleanup and diagnostic User-Agent rejection.
 
 Publication rules:
@@ -759,7 +760,7 @@ machine credential storage, not chat, process arguments, tracked files, or shell
 
 The client needs `cloudflared` as an OpenSSH `ProxyCommand`, the Access token in its environment,
 the independently copied server host-key pin, and a separately authorized SSH login key. Follow
-the [native SSH client recipe](skills/cloudflare-publish/references/operator-recipes.md#publish-native-ssh)
+the [native SSH client recipe](plugin/skills/cloudflare-publish/references/operator-recipes.md#publish-native-ssh)
 for those boundaries and a reverse-forwarding design for remote machines.
 
 Cloudflare carries the outer transport and remains an account and availability dependency; native

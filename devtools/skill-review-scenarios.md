@@ -93,7 +93,7 @@ answer materially improves operator safety and product specificity.
 
 ## Package embodiment
 
-- Source package lives in `skills/cloudflare-publish`.
+- Source package lives in `plugin/skills/cloudflare-publish`; the host installs only `plugin/`.
 - Package changes keep review scenarios, metadata, and validation aligned.
 - The host owns discovery and removal of the native skill. CLI installation does not overwrite a
   global skill directory, run setup, or change the account. Private workstation configuration stays

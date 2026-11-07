@@ -90,22 +90,22 @@ together. Review the complete outgoing changes and public metadata URLs before p
 operator overlays, environments, credentials, state and build outputs does not make newly tracked
 content safe. Do not import the earlier private development history into this public repository.
 
-Keep the version in `pyproject.toml`, `uv.lock`, `plugin.json` and `.claude-plugin/plugin.json`
-aligned. After the accepted source commit is public, update the catalog's exact source revision and
+Keep the version in `pyproject.toml`, `uv.lock`, `plugin/plugin.json` and
+`plugin/.claude-plugin/plugin.json` aligned. After the accepted source commit is public, update the catalog's exact source revision and
 use native host operations to refresh installed plugins. CLI installation remains explicit and
 separate. Package checks need no Cloudflare account and do not establish native host activation,
 current provider behavior, or a first live publication.
 
 ## Icon Assets
 
-The cloud-and-local-endpoint drawing in `skills/cloudflare-publish/assets/icon-small.svg` is original
-project artwork under the root MIT license, not a Cloudflare logo or a vendor asset. It is the editable
-source for `icon-large.png`. Rebuild the PNG locally with librsvg:
+The cloud-and-local-endpoint drawing in `plugin/skills/cloudflare-publish/assets/icon-small.svg`
+is original project artwork under the root MIT license, not a Cloudflare logo or a vendor asset.
+It is the editable source for `icon-large.png`. Rebuild the PNG locally with librsvg:
 
 ```bash
 rsvg-convert --width 512 --height 512 \
-  skills/cloudflare-publish/assets/icon-small.svg \
-  --output skills/cloudflare-publish/assets/icon-large.png
+  plugin/skills/cloudflare-publish/assets/icon-small.svg \
+  --output plugin/skills/cloudflare-publish/assets/icon-large.png
 ```
 
 librsvg is an optional asset-authoring tool, not a runtime or installation dependency.
@@ -129,8 +129,9 @@ surfaces in the same change:
 - `README.md`
 - `ARCH.md`
 - `CONTRIBUTING.md`
-- `skills/cloudflare-publish/`
-- `plugin.json` and `.claude-plugin/plugin.json` (identity stays aligned with `pyproject.toml`)
+- `plugin/skills/cloudflare-publish/`
+- `plugin/plugin.json` and `plugin/.claude-plugin/plugin.json` (identity stays aligned with
+  `pyproject.toml`)
 
 At minimum, re-check:
 
@@ -268,8 +269,9 @@ Before calling a change done:
 - check that discovery neither fetches tunnel tokens nor emits raw vendor or credential payloads
 - keep the writer lock around the complete mutation, not just the manifest save
 - keep the repo skill package synchronized with the public product contract
-- validate `skills/cloudflare-publish/agents/openai.yaml`
-- keep `skills/cloudflare-publish/scripts/inspect-manager.sh` executable and shell-valid
+- validate `plugin/skills/cloudflare-publish/agents/openai.yaml`
+- keep `plugin/skills/cloudflare-publish/scripts/inspect-manager.sh` executable and shell-valid
+- keep `plugin/` limited to its manifests, `LICENSE` and `skills/`
 - keep skill icons structurally valid
 - keep Mac/Linux paths, service ownership, private-store limits, package descriptions and inspector
   branches synchronized; never label a Linux fake gate as live host acceptance

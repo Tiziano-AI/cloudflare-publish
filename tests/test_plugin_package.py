@@ -12,15 +12,19 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = REPO_ROOT / "devtools" / "validate_package.py"
-SOURCE_ROOT = REPO_ROOT / "skills" / "cloudflare-publish"
+SOURCE_ROOT = REPO_ROOT / "plugin" / "skills" / "cloudflare-publish"
 
 
 def _copy_package(destination: Path) -> Path:
     destination.mkdir()
-    for relative in ("plugin.json", "pyproject.toml", "LICENSE"):
+    for relative in ("pyproject.toml", "LICENSE", "README.md"):
         shutil.copy2(REPO_ROOT / relative, destination / relative)
+    plugin = destination / "plugin"
+    plugin.mkdir()
+    for relative in ("plugin.json", "LICENSE"):
+        shutil.copy2(REPO_ROOT / "plugin" / relative, plugin / relative)
     for relative in ("skills", ".claude-plugin"):
-        shutil.copytree(REPO_ROOT / relative, destination / relative)
+        shutil.copytree(REPO_ROOT / "plugin" / relative, plugin / relative)
     return destination
 
 
@@ -47,7 +51,7 @@ def test_package_rejects_version_drift(tmp_path: Path) -> None:
     """The host must not present a plugin version that disagrees with the CLI."""
 
     package = _copy_package(tmp_path / "package")
-    manifest = package / ".claude-plugin" / "plugin.json"
+    manifest = package / "plugin" / ".claude-plugin" / "plugin.json"
     payload = json.loads(manifest.read_text())
     payload["version"] = "9.9.9"
     manifest.write_text(json.dumps(payload))
@@ -60,7 +64,7 @@ def test_package_requires_native_listing_icon(tmp_path: Path) -> None:
     """Claude presentation metadata is required without becoming shared identity."""
 
     package = _copy_package(tmp_path / "package")
-    manifest = package / ".claude-plugin" / "plugin.json"
+    manifest = package / "plugin" / ".claude-plugin" / "plugin.json"
     payload = json.loads(manifest.read_text())
     del payload["icon"]
     manifest.write_text(json.dumps(payload))
@@ -73,7 +77,7 @@ def test_native_icon_reuses_portable_listing_image(tmp_path: Path) -> None:
     """Both hosts present the same image rather than drifting to separate artwork."""
 
     package = _copy_package(tmp_path / "package")
-    manifest = package / ".claude-plugin" / "plugin.json"
+    manifest = package / "plugin" / ".claude-plugin" / "plugin.json"
     payload = json.loads(manifest.read_text())
     payload["icon"] = "./skills/cloudflare-publish/assets/icon-small.svg"
     manifest.write_text(json.dumps(payload))
@@ -82,16 +86,16 @@ def test_native_icon_reuses_portable_listing_image(tmp_path: Path) -> None:
     assert "reuse the portable listing image" in completed.stderr
 
 
-@pytest.mark.parametrize("target", ["missing.png", "../outside.png"])
+@pytest.mark.parametrize("target", ["missing.png", "../LICENSE"])
 def test_listing_icons_stay_in_package(tmp_path: Path, target: str) -> None:
-    """Matching host metadata cannot admit a missing or external image."""
+    """Matching host metadata cannot admit a missing image or one outside the plugin payload."""
 
     package = _copy_package(tmp_path / "package")
-    portable_path = package / "plugin.json"
+    portable_path = package / "plugin" / "plugin.json"
     portable = json.loads(portable_path.read_text())
     portable["extensions"]["com.openai"]["interface"]["logo"] = target
     portable_path.write_text(json.dumps(portable))
-    native_path = package / ".claude-plugin" / "plugin.json"
+    native_path = package / "plugin" / ".claude-plugin" / "plugin.json"
     native = json.loads(native_path.read_text())
     native["icon"] = target
     native_path.write_text(json.dumps(native))
@@ -100,12 +104,25 @@ def test_listing_icons_stay_in_package(tmp_path: Path, target: str) -> None:
     assert "missing or escaping skill reference" in completed.stderr
 
 
-@pytest.mark.parametrize("target", ["missing.md", "../../../LICENSE"])
+def test_composer_icon_stays_in_package(tmp_path: Path) -> None:
+    """The portable composer icon resolves inside the installed plugin payload."""
+
+    package = _copy_package(tmp_path / "package")
+    portable_path = package / "plugin" / "plugin.json"
+    portable = json.loads(portable_path.read_text())
+    portable["extensions"]["com.openai"]["interface"]["composerIcon"] = "../README.md"
+    portable_path.write_text(json.dumps(portable))
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "missing or escaping skill reference" in completed.stderr
+
+
+@pytest.mark.parametrize("target", ["missing.md", "../../LICENSE"])
 def test_skill_references_are_self_contained(tmp_path: Path, target: str) -> None:
     """A cached skill cannot rely on missing files or material outside its own tree."""
 
     package = _copy_package(tmp_path / "package")
-    skill = package / "skills" / "cloudflare-publish" / "SKILL.md"
+    skill = package / "plugin" / "skills" / "cloudflare-publish" / "SKILL.md"
     skill.write_text(skill.read_text() + f"\n[Broken reference]({target})\n")
     completed = _validate(package)
     assert completed.returncode == 1
@@ -116,7 +133,7 @@ def test_skill_cannot_reference_personal_checkout(tmp_path: Path) -> None:
     """Public instructions must not select one developer's home or private secret tooling."""
 
     package = _copy_package(tmp_path / "package")
-    skill = package / "skills" / "cloudflare-publish" / "SKILL.md"
+    skill = package / "plugin" / "skills" / "cloudflare-publish" / "SKILL.md"
     skill.write_text(skill.read_text() + "\nInstall from /Users/example/Code/private-checkout.\n")
     completed = _validate(package)
     assert completed.returncode == 1
@@ -127,21 +144,47 @@ def test_skill_rejects_linked_files(tmp_path: Path) -> None:
     """No link may acquire bytes from a neighbouring private checkout during packaging."""
 
     package = _copy_package(tmp_path / "package")
-    (package / "skills" / "cloudflare-publish" / "linked").symlink_to(package / "LICENSE")
+    skill = package / "plugin" / "skills" / "cloudflare-publish"
+    (skill / "linked").symlink_to(package / "LICENSE")
     completed = _validate(package)
     assert completed.returncode == 1
     assert "non-regular entry" in completed.stderr
 
 
-@pytest.mark.parametrize("surface", ["hooks", "mcp.json"])
-def test_guidance_only_package_has_no_automatic_execution(tmp_path: Path, surface: str) -> None:
-    """Unexpected execution surfaces must not silently change this package's install effects."""
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "bin",
+        "hooks",
+        "mcp.json",
+        ".mcp.json",
+        ".codex-plugin",
+        "package.json",
+        "pyproject.toml",
+        "src",
+        ".claude-plugin/hooks.json",
+    ],
+)
+def test_plugin_payload_admits_only_guidance(tmp_path: Path, entry: str) -> None:
+    """The host-installed subdirectory never carries the CLI, hooks, MCP or development files."""
 
     package = _copy_package(tmp_path / "package")
-    (package / surface).touch()
+    (package / "plugin" / entry).touch()
     completed = _validate(package)
     assert completed.returncode == 1
-    assert "execution surface" in completed.stderr
+    assert "must contain only its manifests, LICENSE and skills/" in completed.stderr
+    assert entry.rsplit("/", maxsplit=1)[-1] in completed.stderr
+
+
+def test_plugin_license_matches_root_license(tmp_path: Path) -> None:
+    """The license notice that ships with the guidance is the repository's own license."""
+
+    package = _copy_package(tmp_path / "package")
+    license_path = package / "plugin" / "LICENSE"
+    license_path.write_text(license_path.read_text() + "\nAmended.\n")
+    completed = _validate(package)
+    assert completed.returncode == 1
+    assert "exact copy of the root LICENSE" in completed.stderr
 
 
 def test_cli_installer_does_not_write_global_skills() -> None:

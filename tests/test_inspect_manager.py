@@ -14,6 +14,7 @@ import pytest
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
+    / "plugin"
     / "skills"
     / "cloudflare-publish"
     / "scripts"

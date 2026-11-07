@@ -1,11 +1,11 @@
 include .gitignore AGENTS.md ARCH.md CONTRIBUTING.md LICENSE Makefile README.md
-include plugin.json pyproject.toml uv.lock
+include pyproject.toml uv.lock
 include .npmrc package.json package-lock.json
-include .claude-plugin/plugin.json
+include plugin/plugin.json plugin/.claude-plugin/plugin.json plugin/LICENSE
 include bin/cloudflare-publish
 recursive-include src *.py
 recursive-include devtools *.py *.md
-recursive-include skills/cloudflare-publish *.md *.yaml *.sh *.svg *.png
+recursive-include plugin/skills/cloudflare-publish *.md *.yaml *.sh *.svg *.png
 recursive-include tests *.py
 recursive-include typings *.pyi
 global-exclude *.py[cod] .DS_Store

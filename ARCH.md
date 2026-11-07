@@ -188,9 +188,10 @@ and supported fields first and refuse foreign drift instead of overwriting it.
   repository root. User-private skills live under `$HOME/.agents/skills`, and skills with duplicate
   names are not merged.
   - [Where Codex discovers skills](https://developers.openai.com/codex/skills#where-to-save-skills)
-- Portable Agent Plugins discover `skills/` at the package root. OpenAI settings belong in
-  `plugin.json` under `extensions.com.openai`; Claude Code reads `.claude-plugin/plugin.json` and
-  the same `skills/` tree. This skill-only package adds neither hooks nor MCP servers.
+- Portable Agent Plugins discover `skills/` at the plugin root, which for this product is the
+  repository's `plugin/` subdirectory. OpenAI settings belong in `plugin/plugin.json` under
+  `extensions.com.openai`; Claude Code reads `plugin/.claude-plugin/plugin.json` and the same
+  `skills/` tree. This skills-only package adds neither hooks, MCP servers nor executables.
   - [Agent plugin structure](https://developers.openai.com/plugins/build/plugins#plugin-structure)
   - [Claude Code plugin layout](https://code.claude.com/docs/en/plugins-reference#standard-layout)
 - Codex local environments are app-supported project setup/action files that may be checked into a
@@ -218,8 +219,9 @@ Neither source publication nor installation configures Cloudflare or changes exi
 - one local native user-service-managed `cloudflared` connector
 - one local state manifest
 - one host-native credential store (macOS Keychain namespace or Linux private files)
-- one canonical public product skill source at `skills/cloudflare-publish/`, discovered and owned
-  by the plugin host rather than copied into a global skill directory by the CLI installer
+- one canonical public product skill source at `plugin/skills/cloudflare-publish/`, discovered
+  and owned by the plugin host rather than copied into a global skill directory by the CLI
+  installer
 
 `cloudflare-publish` does not manage:
 
@@ -905,7 +907,7 @@ Recovery posture:
 
 The canonical source for the `cloudflare-publish` skill package lives in:
 
-- `skills/cloudflare-publish/`
+- `plugin/skills/cloudflare-publish/`
 
 The package is a portable public product skill. It contains portable product workflows only:
 Cloudflare publication commands, recovery boundaries, no-secret inspection, and package review
@@ -913,10 +915,12 @@ scenarios. Private workstation configuration belongs to machine configuration an
 diagnostics, not in
 this public skill package or a second local-ops skill.
 
-`plugin.json` is the portable package identity and OpenAI listing. `.claude-plugin/plugin.json`
-contains matching native metadata. Their name, version, and license agree with `pyproject.toml`.
-The host discovers the single `skills/` tree; there is no second generated copy or product-owned
-global skill installer. The package needs an executor on the publishing macOS or Linux host;
+The host installs only the repository's `plugin/` subdirectory: `plugin/plugin.json`, the portable
+package identity and OpenAI listing; `plugin/.claude-plugin/plugin.json`, matching native metadata;
+an exact copy of the root `LICENSE`; and `plugin/skills/`. Nothing else belongs there: no CLI,
+executable, hook, MCP server, Python or npm manifest, or source. The manifests' name, version, and
+license agree with `pyproject.toml`. The host discovers the single `skills/` tree; there is no
+second generated copy or product-owned global skill installer. The package needs an executor on the publishing macOS or Linux host;
 it does not promise browser-only execution or execute commands on another host by itself.
 
 The CLI and plugin install independently. `make install-local` installs only the Python CLI with

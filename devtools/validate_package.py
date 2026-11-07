@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check this skill-only plugin without installing it or reading manager state."""
+"""Check the skills-only plugin payload without installing it or reading manager state."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import cast
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_DIR = "plugin"
 SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 IDENTITY_FIELDS = (
     "name",
@@ -25,6 +26,11 @@ IDENTITY_FIELDS = (
     "license",
     "keywords",
 )
+# The host installs only this subdirectory. It carries guidance, never the CLI or dev tooling.
+PLUGIN_PAYLOAD = frozenset({"plugin.json", ".claude-plugin", "LICENSE", "skills"})
+NATIVE_MANIFEST_DIR = frozenset({"plugin.json"})
+# Finder metadata is ignored by Git and excluded from the sdist; it never reaches a host install.
+IGNORED_OS_FILES = frozenset({".DS_Store"})
 REQUIRED_SKILL_FILES = (
     "SKILL.md",
     "agents/openai.yaml",
@@ -41,10 +47,18 @@ REQUIRED_SKILL_FILES = (
 
 
 def validate_package(root: Path) -> None:
-    """Validate package closure and coherent metadata, not host activation or Cloudflare."""
+    """Validate payload closure and coherent metadata, not host activation or Cloudflare."""
 
-    portable = json.loads((root / "plugin.json").read_text(encoding="utf-8"))
-    native = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    project = cast(
+        dict[str, object],
+        tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"],
+    )
+    plugin = root / PLUGIN_DIR
+    _validate_payload(plugin)
+    if (plugin / "LICENSE").read_bytes() != (root / "LICENSE").read_bytes():
+        raise ValueError("plugin/LICENSE must be an exact copy of the root LICENSE")
+    portable = json.loads((plugin / "plugin.json").read_text(encoding="utf-8"))
+    native = json.loads((plugin / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     if not isinstance(portable, dict) or not isinstance(native, dict):
         raise ValueError("plugin manifests must contain JSON objects")
     for key in IDENTITY_FIELDS:
@@ -52,10 +66,6 @@ def validate_package(root: Path) -> None:
             raise ValueError(f"plugin identity differs or is missing: {key}")
     if portable.get("$schema") != SCHEMA:
         raise ValueError("portable manifest must declare Agent Plugins 1.0.0")
-    project = cast(
-        dict[str, object],
-        tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"],
-    )
     if (portable["name"], portable["version"], portable["license"]) != (
         project["name"],
         project["version"],
@@ -71,21 +81,46 @@ def validate_package(root: Path) -> None:
     interface = openai.get("interface")
     if not isinstance(interface, dict):
         raise ValueError("plugin listing metadata is missing")
-    for path in ("hooks", "mcp.json", ".mcp.json", ".codex-plugin"):
-        if (root / path).exists():
-            raise ValueError(f"this skill-only package must not add an execution surface: {path}")
     if set(native) != {*IDENTITY_FIELDS, "icon"}:
         raise ValueError("Claude manifest must contain identity and icon metadata only")
     icon = native.get("icon")
     if not isinstance(icon, str) or icon != interface.get("logo"):
         raise ValueError("Claude icon must reuse the portable listing image")
-    _validate_local_target(root / "plugin.json", root, icon)
-    if not (root / "LICENSE").is_file():
-        raise ValueError("LICENSE is missing from the package")
-    skills = root / "skills"
+    composer_icon = interface.get("composerIcon")
+    if not isinstance(composer_icon, str):
+        raise ValueError("portable listing must declare composerIcon")
+    for target in (icon, composer_icon):
+        _validate_local_target(plugin / "plugin.json", plugin, target)
+    skills = plugin / "skills"
     if skills.is_symlink() or {path.name for path in skills.iterdir()} != {"cloudflare-publish"}:
         raise ValueError("package must contain exactly the cloudflare-publish skill")
-    validate_skill(skills / "cloudflare-publish")
+    skill = skills / "cloudflare-publish"
+    validate_skill(skill)
+
+
+def _validate_payload(plugin: Path) -> None:
+    """Admit only manifests, the license and skills; no CLI, hooks, MCP or dev files."""
+
+    if not plugin.is_dir() or plugin.is_symlink():
+        raise ValueError(f"{PLUGIN_DIR}/ must be a real directory")
+    for directory, expected in (
+        (plugin, PLUGIN_PAYLOAD),
+        (plugin / ".claude-plugin", NATIVE_MANIFEST_DIR),
+    ):
+        if not directory.is_dir() or directory.is_symlink():
+            raise ValueError(f"missing plugin directory: {directory.name}")
+        names = {path.name for path in directory.iterdir()} - IGNORED_OS_FILES
+        unexpected = ", ".join(sorted(names - expected))
+        if unexpected:
+            allowed = "manifests, LICENSE and skills/"
+            raise ValueError(f"{PLUGIN_DIR}/ must contain only its {allowed}; remove: {unexpected}")
+        if expected - names:
+            raise ValueError(f"plugin payload is missing: {', '.join(sorted(expected - names))}")
+    for path in (plugin / "plugin.json", plugin / ".claude-plugin" / "plugin.json"):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"plugin manifest must be a regular file: {path.name}")
+    if (plugin / "LICENSE").is_symlink() or not (plugin / "LICENSE").is_file():
+        raise ValueError("plugin/LICENSE must be a regular file")
 
 
 def validate_skill(root: Path) -> None:
@@ -168,7 +203,7 @@ class PackageArgs(argparse.Namespace):
 
 
 def main() -> int:
-    """Read the package only; installation belongs to the host and the CLI installer."""
+    """Read the source tree only; installation belongs to the host and the CLI installer."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("--root", type=Path, default=REPO_ROOT)
@@ -177,7 +212,7 @@ def main() -> int:
         validate_package(Path(args.root))
     except (ValueError, OSError, element_tree.ParseError) as error:
         parser.exit(1, f"ERROR: {error}\n")
-    print("Plugin metadata and skill closure valid; no installation or live checks performed.")
+    print("Plugin payload and skill closure valid; no installation or live checks performed.")
     return 0
 
 
