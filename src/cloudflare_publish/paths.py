@@ -12,7 +12,7 @@ from cloudflare_publish.models import (
 )
 
 
-def build_paths(repo_root: Path, home: Path, *, platform: str | None = None) -> AppPaths:
+def build_paths(home: Path, *, platform: str | None = None) -> AppPaths:
     """Build the canonical local path set for the current home directory."""
 
     selected = host_platform(platform)
@@ -30,7 +30,6 @@ def build_paths(repo_root: Path, home: Path, *, platform: str | None = None) -> 
         legacy_service_file = service_dir / f"{LEGACY_CLOUDFLARED_LABEL}.plist"
     legacy_cloudflared_dir = home / ".cloudflared"
     return AppPaths(
-        repo_root=repo_root,
         home=home,
         host_platform=selected,
         service_dir=service_dir,

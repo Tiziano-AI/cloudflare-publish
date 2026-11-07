@@ -20,7 +20,7 @@ def test_help_shows_major_capability_groups(
     """Top-level help exposes the PATH-global command families and JSON mode."""
 
     with pytest.raises(SystemExit) as exit_info:
-        main(["--help"], repo_root=fake_environment.repo_root)
+        main(["--help"])
 
     assert exit_info.value.code == 0
     captured = capsys.readouterr()
@@ -44,7 +44,7 @@ def test_help_shows_major_capability_groups(
         assert command in captured.out
 
     with pytest.raises(SystemExit) as apply_exit_info:
-        main(["publish", "apply", "--help"], repo_root=fake_environment.repo_root)
+        main(["publish", "apply", "--help"])
 
     assert apply_exit_info.value.code == 0
     apply_help = capsys.readouterr()
@@ -57,7 +57,7 @@ def test_doctor_json_reports_missing_state_without_crashing(
 ) -> None:
     """Doctor remains diagnostic when auth and manager state are missing."""
 
-    assert main(["--json", "doctor"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "doctor"]) == 0
 
     payload = _json_payload(capsys)
     assert payload["ok"] is True
@@ -78,7 +78,7 @@ def test_doctor_json_reports_private_dotenv_auth_without_leaking_token(
 
     fake_environment.write_private_dotenv({"CLOUDFLARE_API_TOKEN": "token-1"})
 
-    assert main(["--json", "doctor"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "doctor"]) == 0
 
     stdout = capsys.readouterr().out
     assert "token-1" not in stdout
@@ -95,7 +95,7 @@ def test_missing_subcommand_error_uses_public_terms(
 ) -> None:
     """Usage errors do not expose internal argparse destination names."""
 
-    assert main(["discover"], repo_root=fake_environment.repo_root) == 2
+    assert main(["discover"]) == 2
 
     captured = capsys.readouterr()
     assert "discover subcommand" in captured.err
@@ -129,17 +129,17 @@ def test_read_commands_emit_stable_json_schemas(
     _ = capsys.readouterr()
 
     for command in (["ls"], ["inspect", "grafana"], ["service", "status"], ["guard", "status"]):
-        assert main(["--json", *command], repo_root=fake_environment.repo_root) == 0
+        assert main(["--json", *command]) == 0
         payload = _json_payload(capsys)
         assert payload["ok"] is True
         assert payload["data"]
 
-    assert main(["--json", "verify"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "verify"]) == 0
     verify = _json_payload(capsys)
     assert verify["data"]["failures"] == 0
     assert verify["data"]["checks"]
 
-    assert main(["--json", "inspect", "grafana"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "inspect", "grafana"]) == 0
     inspect_stdout = capsys.readouterr().out
     assert "secret-1" not in inspect_stdout
     inspect_payload = json.loads(inspect_stdout)
@@ -158,7 +158,7 @@ def test_verify_json_failure_preserves_executed_check_evidence(
     fake_environment.write_tool_state(tool_state)
     _ = capsys.readouterr()
 
-    assert main(["--json", "verify"], repo_root=fake_environment.repo_root) == 1
+    assert main(["--json", "verify"]) == 1
 
     payload = _json_payload(capsys)
     assert payload["ok"] is False
@@ -175,7 +175,7 @@ def test_verify_json_missing_manager_remains_public_diagnostic(
 ) -> None:
     """Missing manager state is a normal JSON error and does not invent check evidence."""
 
-    assert main(["--json", "verify"], repo_root=fake_environment.repo_root) == 1
+    assert main(["--json", "verify"]) == 1
 
     payload = _json_payload(capsys)
     assert payload["ok"] is False
@@ -209,7 +209,6 @@ def test_plan_commands_do_not_mutate_state(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -238,7 +237,6 @@ def test_plan_commands_do_not_mutate_state(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -254,7 +252,7 @@ def test_plan_commands_do_not_mutate_state(
         ["tunnel", "recover", "plan"],
         ["repair", "plan"],
     ):
-        assert main(["--json", *command], repo_root=fake_environment.repo_root) == 0
+        assert main(["--json", *command]) == 0
         plan = _json_payload(capsys)
         assert plan["data"]["plan"] is True or plan["data"]["action"] == "repair plan"
         assert fake_environment.tool_state() == before_tool_state
@@ -281,11 +279,11 @@ def test_json_credential_handoff_is_limited_to_explicit_success_commands(
     )
     assert "service_token_client_secret" not in json.dumps(publish_payload["data"]["publication"])
 
-    assert main(["--json", "inspect", "grafana"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "inspect", "grafana"]) == 0
     inspect_stdout = capsys.readouterr().out
     assert "secret-1" not in inspect_stdout
 
-    assert main(["--json", "token", "rotate", "grafana"], repo_root=fake_environment.repo_root) == 1
+    assert main(["--json", "token", "rotate", "grafana"]) == 1
     denied_stdout = capsys.readouterr().out
     assert "secret-1" not in denied_stdout
     denied = json.loads(denied_stdout)
@@ -294,7 +292,6 @@ def test_json_credential_handoff_is_limited_to_explicit_success_commands(
     assert (
         main(
             ["--json", "token", "rotate", "grafana", "--yes"],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -361,7 +358,6 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
 
@@ -383,7 +379,6 @@ def _publish_machine(fake_environment: FakeEnvironment, *, json_mode: bool) -> i
             "--audience",
             "machine",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
 

@@ -356,7 +356,6 @@ def test_resume_finishes_routing_without_vanished_reused_secret_and_reports_hand
                 "--zone",
                 "example.com",
             ],
-            repo_root=env.repo_root,
         )
         == 0
     )
@@ -373,7 +372,7 @@ def test_resume_finishes_routing_without_vanished_reused_secret_and_reports_hand
         "--audience",
         "machine",
     ]
-    assert main(arguments, repo_root=env.repo_root) == 0
+    assert main(arguments) == 0
     _ = capsys.readouterr()
     state_path = env.home / "Library/Application Support/cloudflare-publish/state.json"
     original = load_manifest(state_path)
@@ -381,7 +380,7 @@ def test_resume_finishes_routing_without_vanished_reused_secret_and_reports_hand
     old = original.publications["target"]
     arguments[arguments.index("http://127.0.0.1:3000")] = "http://127.0.0.1:4000"
     env.inject_api_fault("PUT", "/accounts/acc-123/cfd_tunnel/tunnel-1/configurations")
-    assert main(arguments, repo_root=env.repo_root) == 1
+    assert main(arguments) == 1
     _ = capsys.readouterr()
     pending = load_manifest(state_path)
     assert pending is not None and pending.pending is not None
@@ -389,7 +388,7 @@ def test_resume_finishes_routing_without_vanished_reused_secret_and_reports_hand
     del state["keychain"][f"cloudflare-publish:{old.state.service_token_keychain_account}"]
     env.write_tool_state(state)
 
-    assert main(arguments, repo_root=env.repo_root) == 1
+    assert main(arguments) == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["error"]["code"] == "credential_handoff_unavailable"
     assert payload["data"] == {"publication_applied": True, "publication_name": "target"}
@@ -399,4 +398,4 @@ def test_resume_finishes_routing_without_vanished_reused_secret_and_reports_hand
     assert retained.publications["target"].spec.origin_url == "http://127.0.0.1:4000"
     assert retained.publications["target"].state.service_token_id == old.state.service_token_id
     assert len(env.tool_state()["cloudflare"]["service_tokens"]) == 1
-    assert main(["--json", "token", "rotate", "target", "--yes"], repo_root=env.repo_root) == 0
+    assert main(["--json", "token", "rotate", "target", "--yes"]) == 0

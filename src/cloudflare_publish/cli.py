@@ -44,7 +44,6 @@ def entrypoint() -> None:
 def main(
     argv: list[str] | None = None,
     *,
-    repo_root: Path | None = None,
     home: Path | None = None,
 ) -> int:
     """Run the canonical CLI and return a process exit code."""
@@ -54,7 +53,7 @@ def main(
         args = parse_args(argv)
         name = command_name(args)
         console = QuietConsole() if args.json else Console()
-        runtime = build_cli_runtime(repo_root=repo_root, home=home)
+        runtime = build_cli_runtime(home=home)
         if _mutates_manager(args):
             with ManagerWriterLock(runtime.paths):
                 if args.command in {"guard", "tunnel", "service"}:

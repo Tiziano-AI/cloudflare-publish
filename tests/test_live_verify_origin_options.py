@@ -31,13 +31,12 @@ def test_verify_models_effective_tunnel_tls_origin_options(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["--json", "verify", "secure", "--live"], repo_root=fake_environment.repo_root) == 1
+    assert main(["--json", "verify", "secure", "--live"]) == 1
     failed = json.loads(capsys.readouterr().out)
     checks = {check["label"]: check for check in failed["data"]["checks"]}
     assert checks["secure: origin reachable"]["detail"] == "HTTP 526"
@@ -59,13 +58,12 @@ def test_verify_models_effective_tunnel_tls_origin_options(
                 "--origin-server-name",
                 "tls.internal",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["--json", "verify", "secure", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "verify", "secure", "--live"]) == 0
     origin_server_name_passed = json.loads(capsys.readouterr().out)
     checks = {check["label"]: check for check in origin_server_name_passed["data"]["checks"]}
     assert checks["secure: origin reachable"]["ok"] is True
@@ -86,15 +84,12 @@ def test_verify_models_effective_tunnel_tls_origin_options(
                 "machine",
                 "--no-tls-verify",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert (
-        main(["--json", "verify", "insecure", "--live"], repo_root=fake_environment.repo_root) == 0
-    )
+    assert main(["--json", "verify", "insecure", "--live"]) == 0
     no_tls_verify_passed = json.loads(capsys.readouterr().out)
     checks = {check["label"]: check for check in no_tls_verify_passed["data"]["checks"]}
     assert checks["insecure: origin reachable"]["ok"] is True
@@ -114,5 +109,4 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )

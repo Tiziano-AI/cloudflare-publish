@@ -30,7 +30,6 @@ def run_doctor(
         _native_service_preflight(launchd),
         _which_check("uv"),
         _which_check("cloudflare-publish"),
-        _repo_wrapper_check(paths),
         _cloudflared_check(cloudflared),
         CheckResult(
             "state.json exists",
@@ -94,24 +93,6 @@ def _which_check(command: str) -> CheckResult:
 
     path = shutil.which(command)
     return CheckResult(f"{command} on PATH", ok=path is not None, detail=path)
-
-
-def _repo_wrapper_check(paths: AppPaths) -> CheckResult:
-    """Return repo wrapper state when the invocation appears to run from the checkout."""
-
-    wrapper = paths.repo_root / "bin" / "cloudflare-publish"
-    package_root = paths.repo_root / "src" / "cloudflare_publish"
-    if package_root.exists():
-        return CheckResult(
-            "repo development wrapper exists",
-            ok=wrapper.exists(),
-            detail=str(wrapper),
-        )
-    return CheckResult(
-        "repo development wrapper optional",
-        ok=True,
-        detail="not running from source checkout",
-    )
 
 
 def _cloudflared_check(cloudflared: Cloudflared) -> CheckResult:

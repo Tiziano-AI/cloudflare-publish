@@ -202,7 +202,7 @@ def test_cli_installer_does_not_write_global_skills() -> None:
 
 
 def test_diagnostic_resolves_only_path_not_nearby_checkout(tmp_path: Path) -> None:
-    """A source wrapper is not an installed command, even when the skill lives beside it."""
+    """A checkout's development environment is not an installed command beside the skill."""
 
     user_dir = tmp_path / "user"
     user_dir.mkdir()
@@ -216,7 +216,7 @@ def test_diagnostic_resolves_only_path_not_nearby_checkout(tmp_path: Path) -> No
     )
     assert completed.returncode == 0
     assert "not found on PATH" in completed.stdout
-    assert str(REPO_ROOT / "bin" / "cloudflare-publish") not in completed.stdout
+    assert str(REPO_ROOT) not in completed.stdout
 
 
 def test_diagnostic_reports_actual_path_command(tmp_path: Path) -> None:

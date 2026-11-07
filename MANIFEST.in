@@ -2,7 +2,6 @@ include .gitignore AGENTS.md ARCH.md CONTRIBUTING.md LICENSE Makefile README.md
 include pyproject.toml uv.lock
 include .npmrc package.json package-lock.json
 include plugin/plugin.json plugin/.claude-plugin/plugin.json plugin/LICENSE
-include bin/cloudflare-publish
 recursive-include src *.py
 recursive-include devtools *.py *.md
 recursive-include plugin/skills/cloudflare-publish *.md *.yaml *.sh *.svg *.png

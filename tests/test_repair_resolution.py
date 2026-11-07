@@ -693,7 +693,6 @@ def test_late_routing_secret_loss_can_retire_then_resume_exact_publication(
     assert (
         main(
             ["setup", "--api-token", "token-1", "--account-id", "acc-123", "--zone", "example.com"],
-            repo_root=env.repo_root,
         )
         == 0
     )
@@ -717,7 +716,7 @@ def test_late_routing_secret_loss_can_retire_then_resume_exact_publication(
     ]
     if audience == "mixed":
         arguments.extend(["--allow-email", "alice@example.com"])
-    assert main(arguments, repo_root=env.repo_root) == 1
+    assert main(arguments) == 1
     _ = capsys.readouterr()
     stalled = load_manifest(state_path)
     assert stalled is not None and stalled.pending is not None
@@ -753,7 +752,6 @@ def test_late_routing_secret_loss_can_retire_then_resume_exact_publication(
                 original.service_token_id,
                 "--yes",
             ],
-            repo_root=env.repo_root,
         )
         == 0
     )
@@ -769,7 +767,7 @@ def test_late_routing_secret_loss_can_retire_then_resume_exact_publication(
     assert retired_state.access_aud == original.access_aud
     assert retired_state.dns_record_id == original.dns_record_id
     assert retired_state.policy_ids == (original.policy_ids[:1] if audience == "mixed" else ())
-    assert main(arguments, repo_root=env.repo_root) == 0
+    assert main(arguments) == 0
     _ = capsys.readouterr()
     completed = load_manifest(state_path)
     assert completed is not None and completed.pending is None

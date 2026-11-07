@@ -148,13 +148,12 @@ def test_verify_combines_http_and_ssh_on_the_shared_tunnel(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["--json", "verify", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "verify", "--live"]) == 0
     checks = json.loads(capsys.readouterr().out)["data"]["checks"]
     assert any(
         item["label"] == "app: authenticated request succeeds" and item["ok"] for item in checks
@@ -206,7 +205,6 @@ def _setup_and_publish(environment: FakeEnvironment) -> None:
     assert (
         main(
             ["setup", "--api-token", "token-1", "--account-id", "acc-123", "--zone", "example.com"],
-            repo_root=environment.repo_root,
         )
         == 0
     )
@@ -229,7 +227,6 @@ def _setup_and_publish(environment: FakeEnvironment) -> None:
                 "--ssh-host-key",
                 HOST_KEY,
             ],
-            repo_root=environment.repo_root,
         )
         == 0
     )
@@ -238,4 +235,4 @@ def _setup_and_publish(environment: FakeEnvironment) -> None:
 def _verify(environment: FakeEnvironment) -> int:
     """Collect public and direct SSH evidence through the operator entry point."""
 
-    return main(["--json", "verify", "mac", "--live"], repo_root=environment.repo_root)
+    return main(["--json", "verify", "mac", "--live"])

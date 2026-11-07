@@ -232,7 +232,7 @@ def test_status_matches_range() -> None:
 def test_build_paths_uses_manager_locations(tmp_path: Path) -> None:
     """Canonical manager and conflict paths point at the expected locations."""
 
-    paths = build_paths(repo_root=tmp_path / "repo", home=tmp_path / "home", platform="darwin")
+    paths = build_paths(home=tmp_path / "home", platform="darwin")
     assert (
         paths.state_dir
         == tmp_path / "home" / "Library" / "Application Support" / "cloudflare-publish"

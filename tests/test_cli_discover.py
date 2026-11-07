@@ -120,7 +120,7 @@ def test_discovery_reads_api_token_from_private_dotenv(
 
     fake_environment.write_private_dotenv({"CLOUDFLARE_API_TOKEN": "token-1"})
 
-    assert main(["--json", "discover", "accounts"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "discover", "accounts"]) == 0
 
     accounts = _json_payload(capsys)
     assert accounts["data"]["accounts"][0]["id"] == "acc-123"
@@ -132,7 +132,7 @@ def test_discovery_and_doctor_emit_human_output(
 ) -> None:
     """Discovery commands render useful human output without requiring --json."""
 
-    assert main(["doctor"], repo_root=fake_environment.repo_root) == 0
+    assert main(["doctor"]) == 0
     doctor = capsys.readouterr()
     assert "== Doctor ==" in doctor.out
     assert "Ready: no" in doctor.out
@@ -182,7 +182,6 @@ def test_discovery_and_doctor_emit_human_output(
     assert (
         main(
             ["discover", "tunnels", "--account-id", "acc-123"],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -222,7 +221,7 @@ def test_setup_reads_noninteractive_defaults_from_private_dotenv(
         }
     )
 
-    assert main(["setup"], repo_root=fake_environment.repo_root) == 0
+    assert main(["setup"]) == 0
 
     state_file = (
         fake_environment.home
@@ -250,7 +249,6 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
 

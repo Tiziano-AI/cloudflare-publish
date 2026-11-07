@@ -35,9 +35,15 @@ The gate runs:
 - `npm run typecheck`, using only the local basedpyright binary over `src`, `devtools`, and
   the typed fake-binary test surface; it never downloads a missing checker or selects a global copy
 - `pytest`
-- `bash -n bin/cloudflare-publish`
-- `./bin/cloudflare-publish --help`
+- `uv run cloudflare-publish --help`
 - `uv run python devtools/validate_package.py`
+- `shellcheck` and `shfmt -d` over `plugin/skills/cloudflare-publish/scripts/inspect-manager.sh`,
+  each skipped with a notice when it is not installed locally
+
+Run the working tree's CLI with `uv run cloudflare-publish ...` from the checkout, or
+`uv run --project /path/to/checkout cloudflare-publish ...` from another directory. It is a
+development surface: the repository has no wrapper script, and the operator runtime is the
+separately installed command.
 
 Validate the plugin metadata and complete skill tree when the package changes:
 
@@ -210,7 +216,7 @@ exercise:
 Live verification is manual and requires a supported publishing host plus a real Cloudflare account:
 
 ```bash
-bin/cloudflare-publish verify --live
+uv run cloudflare-publish verify --live
 ```
 
 ### Linux live acceptance

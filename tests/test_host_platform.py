@@ -13,8 +13,8 @@ from cloudflare_publish.systemd import Systemd
 
 
 def test_native_paths_and_adapter_selection(tmp_path: Path) -> None:
-    mac = build_paths(tmp_path, tmp_path, platform="darwin")
-    linux = build_paths(tmp_path, tmp_path, platform="linux")
+    mac = build_paths(tmp_path, platform="darwin")
+    linux = build_paths(tmp_path, platform="linux")
     assert (
         mac.service_file
         == tmp_path / "Library/LaunchAgents/com.cloudflare-publish.cloudflared.plist"
@@ -31,7 +31,7 @@ def test_native_paths_and_adapter_selection(tmp_path: Path) -> None:
 
 def test_unsupported_platform_has_no_storage_effect(tmp_path: Path) -> None:
     with pytest.raises(AppError, match="Only macOS and Linux"):
-        _ = build_paths(tmp_path, tmp_path / "unused", platform="win32")
+        _ = build_paths(tmp_path / "unused", platform="win32")
     assert not (tmp_path / "unused").exists()
 
 
@@ -40,4 +40,4 @@ def test_platform_is_not_selectable_by_environment(
 ) -> None:
     monkeypatch.setenv("CLOUDFLARE_PUBLISH_PLATFORM", "linux")
     monkeypatch.setattr("cloudflare_publish.host_platform.sys.platform", "darwin")
-    assert build_paths(tmp_path, tmp_path).host_platform == "darwin"
+    assert build_paths(tmp_path).host_platform == "darwin"

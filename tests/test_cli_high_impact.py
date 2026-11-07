@@ -28,7 +28,6 @@ def test_setup_takeover_requires_confirmation(fake_environment: FakeEnvironment)
                 "--zone",
                 "example.com",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 1
     )
@@ -50,7 +49,7 @@ def test_tunnel_recover_rewrites_token_and_disconnects_connectors(
         / "tunnel-token.txt"
     )
     assert token_file.read_text(encoding="utf-8").strip() == "token-tunnel-1"
-    assert main(["tunnel", "recover", "apply", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["tunnel", "recover", "apply", "--yes"]) == 0
     captured = capsys.readouterr()
     assert "Disconnected every connector on the shared tunnel." in captured.out
     tool_state = fake_environment.tool_state()
@@ -62,7 +61,7 @@ def test_tunnel_recover_requires_confirmation(fake_environment: FakeEnvironment)
     """Tunnel recovery rejects live mutation without --yes."""
 
     assert _setup(fake_environment) == 0
-    assert main(["tunnel", "recover", "apply"], repo_root=fake_environment.repo_root) == 1
+    assert main(["tunnel", "recover", "apply"]) == 1
     assert fake_environment.cleaned_tunnel_ids() == ()
 
 
@@ -72,7 +71,7 @@ def test_tunnel_recover_requires_manager_state_after_confirmation(
 ) -> None:
     """Confirmed tunnel recovery fails cleanly when the manager is not bootstrapped."""
 
-    assert main(["tunnel", "recover", "apply", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["tunnel", "recover", "apply", "--yes"]) == 1
     captured = capsys.readouterr()
     assert "Manager state is missing" in captured.err
 
@@ -87,7 +86,7 @@ def test_tunnel_recover_prefers_missing_manager_state_over_tool_checks(
     tool_state["cloudflared_version"] = "cloudflared version 2025.3.9"
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["tunnel", "recover", "apply", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["tunnel", "recover", "apply", "--yes"]) == 1
     captured = capsys.readouterr()
     assert "Manager state is missing" in captured.err
     assert "2026.10.3 or later is required" not in captured.err
@@ -106,9 +105,9 @@ def test_token_rotate_and_guard_apply_require_confirmation(
     ]["grafana"]["state"]
     keychain_key = f"cloudflare-publish:{publication_state['service_token_keychain_account']}"
     before_secret = fake_environment.tool_state()["keychain"][keychain_key]
-    assert main(["token", "rotate", "grafana"], repo_root=fake_environment.repo_root) == 1
+    assert main(["token", "rotate", "grafana"]) == 1
     assert fake_environment.tool_state()["keychain"][keychain_key] == before_secret
-    assert main(["token", "rotate", "grafana", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["token", "rotate", "grafana", "--yes"]) == 0
     captured = capsys.readouterr()
     assert "Client ID: client-token-1" in captured.out
     assert "Client secret: secret-2" in captured.out
@@ -123,8 +122,8 @@ def test_token_rotate_and_guard_apply_require_confirmation(
         "public.example.com"
     ]
     _write_tool_state(fake_environment, tool_state)
-    assert main(["guard", "apply"], repo_root=fake_environment.repo_root) == 1
-    assert main(["guard", "apply", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["guard", "apply"]) == 1
+    assert main(["guard", "apply", "--yes"]) == 0
     assert (
         fake_environment.tool_state()["cloudflare"]["organization"]["deny_unmatched_requests"]
         is True
@@ -139,9 +138,9 @@ def test_teardown_removes_manager_and_remote_state(fake_environment: FakeEnviron
 
     assert _setup(fake_environment) == 0
     assert _publish_machine(fake_environment) == 0
-    assert main(["teardown"], repo_root=fake_environment.repo_root) == 1
+    assert main(["teardown"]) == 1
     assert _state_path(fake_environment).exists()
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["teardown", "--yes"]) == 0
     assert not _state_path(fake_environment).exists()
     tool_state = fake_environment.tool_state()
     assert tool_state["cloudflare"]["tunnels"] == {}
@@ -169,14 +168,13 @@ def test_guard_cannot_break_a_managed_public_publication(
                 "--audience",
                 "public",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["guard", "plan"], repo_root=fake_environment.repo_root) == 1
-    assert main(["guard", "apply", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["guard", "plan"]) == 1
+    assert main(["guard", "apply", "--yes"]) == 1
     captured = capsys.readouterr()
     assert "Require-protection would block managed public publications" in captured.err
     assert (
@@ -184,7 +182,7 @@ def test_guard_cannot_break_a_managed_public_publication(
         is False
     )
 
-    assert main(["--json", "guard", "status"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "guard", "status"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["data"]["organization"]["guard_blocked_by_publications"] == ["video-ingress"]
 
@@ -202,7 +200,6 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
 
@@ -222,7 +219,6 @@ def _publish_machine(fake_environment: FakeEnvironment) -> int:
             "--audience",
             "machine",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
 

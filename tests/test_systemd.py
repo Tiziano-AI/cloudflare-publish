@@ -191,7 +191,7 @@ class NativeRunner(CommandRunner):
 
 @pytest.fixture
 def native(tmp_path: Path) -> tuple[AppPaths, NativeRunner, Systemd]:
-    paths = build_paths(tmp_path, tmp_path / "home", platform="linux")
+    paths = build_paths(tmp_path / "home", platform="linux")
     paths.service_dir.mkdir(parents=True)
     paths.state_dir.mkdir(parents=True, mode=0o700)
     paths.logs_dir.mkdir(mode=0o700)
@@ -799,7 +799,7 @@ def test_restart_does_not_implicitly_enable_stopped_unit(
 def test_lifecycle_accepts_literal_special_paths(tmp_path: Path) -> None:
     """Exercise readback/lifecycle, not only the renderer's quoting assertions."""
 
-    paths = build_paths(tmp_path, tmp_path / 'space %i $ENV \\ "quote', platform="linux")
+    paths = build_paths(tmp_path / 'space %i $ENV \\ "quote', platform="linux")
     paths.state_dir.mkdir(parents=True, mode=0o700)
     paths.logs_dir.mkdir(mode=0o700)
     runner = NativeRunner(paths)
@@ -968,7 +968,7 @@ def test_linux_local_cleanup_preserves_unknown_entries(
 
 
 def test_render_uses_systemd_not_shell_quoting(tmp_path: Path) -> None:
-    paths = build_paths(tmp_path, tmp_path / 'space %i $ENV \\ "quote', platform="linux")
+    paths = build_paths(tmp_path / 'space %i $ENV \\ "quote', platform="linux")
     text = render_systemd_unit(paths, '/opt/space %f \\ "quote/cloudflared')
     assert '"/opt/space %%f \\\\ \\"quote/cloudflared"' in text
     assert "$${" not in text
@@ -983,6 +983,6 @@ def test_render_uses_systemd_not_shell_quoting(tmp_path: Path) -> None:
     "binary", ["relative/cloudflared", "/a\nb", "/a\rb", "/a\x00b", "/a;bad", "/$ENV/cloudflared"]
 )
 def test_render_refuses_ambiguous_or_control_injecting_binary(tmp_path: Path, binary: str) -> None:
-    paths = build_paths(tmp_path, tmp_path, platform="linux")
+    paths = build_paths(tmp_path, platform="linux")
     with pytest.raises(AppError):
         _ = render_systemd_unit(paths, binary)

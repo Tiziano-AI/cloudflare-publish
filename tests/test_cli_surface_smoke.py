@@ -10,24 +10,6 @@ from cloudflare_publish.cli import main
 from tests.fake_environment import FakeEnvironment
 
 
-def test_doctor_treats_arbitrary_directory_bin_as_optional(
-    fake_environment: FakeEnvironment,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """PATH-global doctor does not mistake an arbitrary `bin/` folder for the source checkout."""
-
-    (fake_environment.repo_root / "bin").mkdir()
-
-    payload = _run_json(
-        fake_environment,
-        capsys,
-        ["doctor"],
-    )
-
-    labels = {item["label"]: item for item in _objects(payload["data"]["checks"])}
-    assert labels["repo development wrapper optional"]["ok"] is True
-
-
 def test_every_cli_surface_smokes_in_fake_environment(
     fake_environment: FakeEnvironment,
     capsys: pytest.CaptureFixture[str],
@@ -35,7 +17,7 @@ def test_every_cli_surface_smokes_in_fake_environment(
     """Exercise every public CLI command family without live Cloudflare writes."""
 
     with pytest.raises(SystemExit) as help_exit:
-        main(["--help"], repo_root=fake_environment.repo_root)
+        main(["--help"])
     assert help_exit.value.code == 0
     _ = capsys.readouterr()
 
@@ -215,7 +197,7 @@ def _run_json(
 ) -> dict[str, object]:
     """Run one JSON CLI command and return the decoded success envelope."""
 
-    exit_code = main(["--json", *command], repo_root=fake_environment.repo_root)
+    exit_code = main(["--json", *command])
     captured = capsys.readouterr()
     assert captured.err == ""
     assert exit_code == 0, captured.out
@@ -232,7 +214,7 @@ def _run_human(
 ) -> str:
     """Run one human CLI command and return stdout."""
 
-    exit_code = main(command, repo_root=fake_environment.repo_root)
+    exit_code = main(command)
     captured = capsys.readouterr()
     assert captured.err == ""
     assert exit_code == 0, captured.out

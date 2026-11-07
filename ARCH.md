@@ -239,8 +239,9 @@ Neither source publication nor installation configures Cloudflare or changes exi
 
 ## Canonical Flow
 
-`bin/cloudflare-publish` → `cloudflare_publish.cli` → workflow modules → adapters (`curl`,
-`cloudflared`, native user service, host credential store) → local host state + Cloudflare API
+`cloudflare-publish` console script → `cloudflare_publish.cli` → workflow modules → adapters
+(`curl`, `cloudflared`, native user service, host credential store) → local host state +
+Cloudflare API
 
 Only one path owns each behavior:
 
@@ -312,9 +313,9 @@ service-token secrets do not appear in curl argv or command-failure text.
 ## CLI Contract
 
 The canonical operator surface is the PATH-global `cloudflare-publish` console script. `--version`
-reports installed Python distribution metadata without reading credentials or manager state. The
-repo-local `bin/cloudflare-publish` wrapper remains the development wrapper for a checked-out
-worktree.
+reports installed Python distribution metadata without reading credentials or manager state.
+Development runs a checked-out worktree with `uv run cloudflare-publish`; that is a development
+surface, not the operator runtime, and the repository ships no wrapper script.
 
 The canonical command surface is:
 

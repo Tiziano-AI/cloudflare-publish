@@ -50,7 +50,7 @@ def test_setup_unknown_post_never_creates_a_second_tunnel(
     monkeypatch.setattr(CloudflareApi, "create_tunnel", original)
     assert _setup(fake_environment) == 1
     assert len(fake_environment.tool_state()["cloudflare"]["tunnels"]) == 1
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 1
+    assert main(["setup", "--refresh-only"]) == 1
 
 
 def test_setup_persists_api_credential_before_tunnel_creation(
@@ -188,7 +188,7 @@ def test_setup_refresh_cannot_resurrect_an_incomplete_removal(
         ),
     )
     before = fake_environment.tool_state()["cloudflare"]["tunnel_configurations"]
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 1
+    assert main(["setup", "--refresh-only"]) == 1
     assert fake_environment.tool_state()["cloudflare"]["tunnel_configurations"] == before
 
 
@@ -339,7 +339,7 @@ def test_setup_refresh_refuses_foreign_global_tls_drift(fake_environment: FakeEn
     config = state["cloudflare"]["tunnel_configurations"]["tunnel-1"]["config"]
     config["originRequest"] = {"noTLSVerify": True}
     fake_environment.write_tool_state(state)
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 1
+    assert main(["setup", "--refresh-only"]) == 1
     assert (
         fake_environment.tool_state()["cloudflare"]["tunnel_configurations"]["tunnel-1"]["config"]
         == config
@@ -364,7 +364,7 @@ def test_setup_refresh_rejects_an_unexpected_tunnel_before_any_write(
 
     monkeypatch.setattr(CloudflareApi, "get_tunnel", wrong_tunnel)
     before = fake_environment.tool_state()
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 1
+    assert main(["setup", "--refresh-only"]) == 1
     assert fake_environment.tool_state() == before
     manifest = _manifest(fake_environment)
     assert manifest.manager.tunnel_id == "tunnel-1"
@@ -384,7 +384,7 @@ def test_setup_refresh_explicitly_upgrades_exact_owned_legacy_routes(
     del route["originRequest"]["access"]
     del route["originRequest"]
     fake_environment.write_tool_state(state)
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 0
+    assert main(["setup", "--refresh-only"]) == 0
     guarded = fake_environment.tool_state()["cloudflare"]["tunnel_configurations"]["tunnel-1"][
         "config"
     ]["ingress"][0]
@@ -401,7 +401,7 @@ def test_teardown_retains_protection_when_local_bootout_fails(
     assert _publish(fake_environment) == 0
     before = fake_environment.tool_state()["cloudflare"]
     fake_environment.fail_next_bootout()
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["teardown", "--yes"]) == 1
     after = fake_environment.tool_state()["cloudflare"]
     for key in ("access_apps", "service_tokens", "dns_records", "tunnels"):
         assert after[key] == before[key]
@@ -423,7 +423,7 @@ def test_teardown_blocks_foreign_connectors_without_removing_access(
         foreign["connections"] = [{"id": "edge-foreign", "is_pending_reconnect": False}]
     state["cloudflare"]["tunnel_connections"]["tunnel-1"].append(foreign)
     fake_environment.write_tool_state(state)
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["teardown", "--yes"]) == 1
     after = fake_environment.tool_state()["cloudflare"]
     assert after["access_apps"]
     assert after["tunnels"]
@@ -454,10 +454,10 @@ def test_teardown_lost_delete_response_keeps_access_until_exact_confirmation(
         raise AppError("Synthetic lost delete response.")
 
     monkeypatch.setattr(CloudflareApi, "delete_tunnel", lose_delete)
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["teardown", "--yes"]) == 1
     assert fake_environment.tool_state()["cloudflare"]["access_apps"]
     assert _state_path(fake_environment).exists()
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["teardown", "--yes"]) == 0
     assert delete_calls == 1
     assert not _state_path(fake_environment).exists()
 
@@ -481,7 +481,7 @@ def test_teardown_does_not_accept_delete_without_observed_deletion(
         _ = self, account_id, tunnel_id, missing_ok
 
     monkeypatch.setattr(CloudflareApi, "delete_tunnel", acknowledge_only)
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["teardown", "--yes"]) == 1
     assert fake_environment.tool_state()["cloudflare"]["access_apps"]
     assert _manifest(fake_environment).publications["grafana"].state.access_application_id
 
@@ -502,12 +502,12 @@ def test_teardown_local_cleanup_resumes_after_api_credential_is_retired(
         raise AppError("Synthetic local-cleanup failure.")
 
     monkeypatch.setattr(teardown_flow, "remove_local_manager_artifacts", fail_cleanup)
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["teardown", "--yes"]) == 1
     assert _manifest(fake_environment).pending.phase == "cleanup_complete"
     assert fake_environment.tool_state()["keychain"] == {}
     monkeypatch.setattr(teardown_flow, "remove_local_manager_artifacts", original)
     _ = capsys.readouterr()
-    assert main(["--json", "teardown", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "teardown", "--yes"]) == 0
     assert json.loads(capsys.readouterr().out)["data"]["removed_manager"]["pending"] is None
     assert not _state_path(fake_environment).exists()
 
@@ -575,7 +575,6 @@ def test_explicit_token_recovery_reissues_the_same_owned_token(
                 "--recover",
                 "--yes",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -602,7 +601,6 @@ def test_explicit_token_recovery_without_unknown_rotation_does_not_post(
                 "--recover",
                 "--yes",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 1
     )
@@ -648,7 +646,7 @@ def _setup(environment: FakeEnvironment, *, takeover: bool = False) -> int:
     ]
     if takeover:
         args.extend(["--takeover", "--yes"])
-    return main(args, repo_root=environment.repo_root)
+    return main(args)
 
 
 def _publish(environment: FakeEnvironment) -> int:
@@ -665,12 +663,11 @@ def _publish(environment: FakeEnvironment) -> int:
             "--audience",
             "machine",
         ],
-        repo_root=environment.repo_root,
     )
 
 
 def _rotate(environment: FakeEnvironment) -> int:
-    return main(["token", "rotate", "grafana", "--yes"], repo_root=environment.repo_root)
+    return main(["token", "rotate", "grafana", "--yes"])
 
 
 def _state_path(environment: FakeEnvironment) -> Path:

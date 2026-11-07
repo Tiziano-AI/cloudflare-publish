@@ -522,7 +522,7 @@ def test_linux_teardown_unit_removal_reload_failure_resumes_without_remote_write
 
 
 def _paths(env: FakeEnvironment) -> AppPaths:
-    return build_paths(env.repo_root, env.home, platform="linux")
+    return build_paths(env.home, platform="linux")
 
 
 def _rotate_connector_inputs(
@@ -569,7 +569,7 @@ def _post_count(env: FakeEnvironment, path: str) -> int:
 
 
 def _run(env: FakeEnvironment, *args: str) -> int:
-    return main(list(args), repo_root=env.repo_root)
+    return main(list(args))
 
 
 def _setup(env: FakeEnvironment, *extra: str) -> int:

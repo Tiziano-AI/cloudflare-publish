@@ -315,12 +315,11 @@ def test_process_death_after_accepted_post_retains_uncertainty_before_retry(
         [
             sys.executable,
             "-c",
-            "import sys; from pathlib import Path; import cloudflare_publish.paths as paths; "
+            "import sys; import cloudflare_publish.paths as paths; "
             "from cloudflare_publish.host_platform import host_platform; "
             "paths.host_platform = lambda selected=None: host_platform(selected or 'darwin'); "
             "from cloudflare_publish.cli import main; "
-            "raise SystemExit(main(sys.argv[2:], repo_root=Path(sys.argv[1])))",
-            str(env.repo_root),
+            "raise SystemExit(main(sys.argv[1:]))",
             *arguments,
         ],
         env=child_environment,
@@ -472,7 +471,7 @@ def test_foreign_replica_blocks_teardown_without_revoking_access(
 
 
 def _run(env: FakeEnvironment, *arguments: str) -> int:
-    return main(list(arguments), repo_root=env.repo_root)
+    return main(list(arguments))
 
 
 def _setup(env: FakeEnvironment) -> int:

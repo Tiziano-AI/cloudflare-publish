@@ -84,8 +84,9 @@ hardware qualification or an architecture restriction. The operator supplies mat
   runtimes before install or typecheck; `.npmrc` disables dependency lifecycle scripts and optional
   packages. Do not restore the Python basedpyright package: it selects a separately bundled Node
   runtime instead of the developer's patched Node.
-- `uv run devtools/gate.py` is the gate: ruff lint and format check, basedpyright, pytest, the
-  wrapper's syntax and `--help`, plugin validation, and shellcheck and shfmt when installed. The
+- `uv run devtools/gate.py` is the gate: ruff lint and format check, basedpyright, pytest,
+  `uv run cloudflare-publish --help`, plugin validation, and shellcheck and shfmt over the
+  inspection script when installed. The
   typecheck invokes the repository-local npm binary, with no download, global fallback or bootstrap.
   A repo or skill change is incomplete until it passes.
 - The test suite is hermetic: it runs fake `curl`, `cloudflared`, `ssh`, `launchctl`, `security` and
@@ -97,7 +98,7 @@ hardware qualification or an architecture restriction. The operator supplies mat
   (`doctor`, `verify`, `repair plan`) make no Cloudflare or managed-state
   writes, so neither they nor the gate show that a live write works; report which of them actually
   ran. Live verification is manual on the publishing host and account:
-  `bin/cloudflare-publish verify --live`.
+  `uv run cloudflare-publish verify --live` from the checkout under test.
   Linux additionally needs real user-service ownership/readback, logout/reboot persistence,
   secret-permission, connector-listener evidence, and intended-client HTTPS/WSS negative and
   authenticated acceptance. Hermetic tests do not establish any of these live outcomes.
@@ -113,9 +114,10 @@ hardware qualification or an architecture restriction. The operator supplies mat
 ## Entry points and installation
 
 - The installed PATH-global `cloudflare-publish` console script is the operator entrypoint.
-  `bin/cloudflare-publish` is the development wrapper: it runs `uv run python -m cloudflare_publish`
-  from the repository root, so it needs `uv` on `PATH` and runs the working tree, not the installed
-  command.
+  Development runs the working tree with `uv run cloudflare-publish ...` from the checkout, or
+  `uv run --project <checkout> cloudflare-publish ...` from elsewhere so relative paths keep the
+  caller's directory. That is a development surface, never the operator runtime, and there is no
+  repository wrapper script.
 - `make install-local` reinstalls only the CLI with `uv tool install --reinstall .`. Run it only
   when installation is in scope. The host separately owns plugin installation, discovery and
   removal; there is no global skill copier, install hook, timer, watcher or unattended sync.
@@ -154,7 +156,7 @@ Tracked docs, tests, the gate and the skill stay
 terminal-first and must not require local app configuration, user-private skill mirrors or
 workstation secret tooling. Workstation recipes, private notes and app actions belong in ignored
 overlays (`.codex/` and `.claude/` are gitignored); the Codex app's local environment, when present,
-lives in `.codex/environments/` and calls `bin/cloudflare-publish`. `ARCH.md`'s Local Operator
+lives in `.codex/environments/` and calls `uv run cloudflare-publish`. `ARCH.md`'s Local Operator
 Overlay Contract owns this boundary.
 
 ## Diagnostics reach Cloudflare

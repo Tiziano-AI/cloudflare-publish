@@ -19,7 +19,7 @@ def _paths(tmp_path: Path) -> AppPaths:
     """Use real no-symlink ancestors, including macOS's temporary-directory alias."""
 
     root = tmp_path.resolve()
-    return build_paths(root / "repo", root / "user", platform="linux")
+    return build_paths(root / "user", platform="linux")
 
 
 def test_linux_lock_creates_private_state_before_any_workflow(tmp_path: Path) -> None:

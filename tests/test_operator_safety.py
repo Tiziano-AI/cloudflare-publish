@@ -21,7 +21,6 @@ def _setup(environment: FakeEnvironment) -> None:
     assert (
         main(
             ["setup", "--api-token", "token-1", "--account-id", "acc-123", "--zone", "example.com"],
-            repo_root=environment.repo_root,
         )
         == 0
     )
@@ -42,7 +41,6 @@ def _publish(environment: FakeEnvironment) -> None:
                 "--audience",
                 "machine",
             ],
-            repo_root=environment.repo_root,
         )
         == 0
     )
@@ -116,7 +114,6 @@ def test_discover_tunnel_is_bounded_secret_free_and_nonmutating(
                 "--zone-id",
                 "zone-123",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -175,7 +172,6 @@ def test_discover_flags_access_destination_overrides_without_exposing_values(
                 "--zone-id",
                 "zone-123",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -216,7 +212,6 @@ def test_access_constraints_are_disclosed_and_fail_managed_policy_parity(
                 "--zone-id",
                 "zone-123",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -227,7 +222,7 @@ def test_access_constraints_are_disclosed_and_fail_managed_policy_parity(
         item["code"] for item in payload["unsupported_topology"]
     }
     assert "hidden-constraint" not in output
-    assert main(["--json", "verify", "app"], repo_root=fake_environment.repo_root) == 1
+    assert main(["--json", "verify", "app"]) == 1
     payload = json.loads(capsys.readouterr().out)["data"]
     check = next(
         item for item in payload["checks"] if item["label"] == "app: Access policies match state"
@@ -256,7 +251,6 @@ def test_discover_tunnel_rejects_mismatched_zone_scope(
                 "--zone-id",
                 "zone-123",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 1
     )
@@ -305,7 +299,6 @@ def test_discovery_distinguishes_deletion_tombstones_and_preserves_residual_name
                     "--zone-id",
                     "zone-123",
                 ],
-                repo_root=fake_environment.repo_root,
             )
             == 0
         )
@@ -327,7 +320,6 @@ def test_discovery_distinguishes_deletion_tombstones_and_preserves_residual_name
     assert (
         main(
             ["discover", "tunnels", "--account-id", "acc-123"],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -343,7 +335,7 @@ def test_grouped_verification_preserves_identity_failure_and_human_output(
     _setup(fake_environment)
     _publish(fake_environment)
     _ = capsys.readouterr()
-    assert main(["--json", "verify", "app", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "verify", "app", "--live"]) == 0
     payload = json.loads(capsys.readouterr().out)["data"]
     assert [group["group"] for group in payload["groups"]] == [
         "manager",
@@ -358,11 +350,11 @@ def test_grouped_verification_preserves_identity_failure_and_human_output(
         else:
             assert check["publication_name"] == "app"
             assert check["hostname"] == "app.example.com"
-    assert main(["verify", "app", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["verify", "app", "--live"]) == 0
     text = capsys.readouterr().out
     for heading in ("Manager", "Routing", "Origin", "Access", "Public Probe"):
         assert f"== {heading} ==" in text
-    paths = build_paths(fake_environment.repo_root, fake_environment.home)
+    paths = build_paths(fake_environment.home)
     manifest = load_manifest(paths.state_file)
     assert manifest is not None
     with patch(
@@ -370,9 +362,7 @@ def test_grouped_verification_preserves_identity_failure_and_human_output(
         side_effect=AppError("Origin unavailable"),
     ):
         # Cloudflare calls use this transport too; all failures remain grouped evidence.
-        assert (
-            main(["--json", "verify", "app", "--live"], repo_root=fake_environment.repo_root) == 1
-        )
+        assert main(["--json", "verify", "app", "--live"]) == 1
     failed = json.loads(capsys.readouterr().out)
     assert failed["error"]["code"] == "verify_failed"
     assert (
@@ -420,19 +410,19 @@ def test_writer_exclusion_precedes_entire_workflow(
 
     _setup(fake_environment)
     _publish(fake_environment)
-    paths = build_paths(fake_environment.repo_root, fake_environment.home)
+    paths = build_paths(fake_environment.home)
     before_remote = deepcopy(fake_environment.tool_state())
     before_manifest = paths.state_file.read_bytes()
     _ = capsys.readouterr()
     with ManagerWriterLock(paths):
-        assert main(["--json", *command], repo_root=fake_environment.repo_root) == 1
+        assert main(["--json", *command]) == 1
         payload = json.loads(capsys.readouterr().out)
         assert payload["error"]["code"] == "manager_busy"
         assert fake_environment.tool_state() == before_remote
         assert paths.state_file.read_bytes() == before_manifest
-        assert main(["--json", "ls"], repo_root=fake_environment.repo_root) == 0
+        assert main(["--json", "ls"]) == 0
         _ = capsys.readouterr()
-    assert main(["--json", "service", "status"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "service", "status"]) == 0
 
 
 @pytest.mark.parametrize("failed_operation", ["os.fsync", "os.replace"])
@@ -442,7 +432,7 @@ def test_atomic_manifest_failure_preserves_previous_bytes_and_restricts_modes(
     """Failed atomic replacement cannot truncate the previous manifest or leak staging files."""
 
     _setup(fake_environment)
-    paths = build_paths(fake_environment.repo_root, fake_environment.home)
+    paths = build_paths(fake_environment.home)
     manifest = load_manifest(paths.state_file)
     assert manifest is not None
     before = paths.state_file.read_bytes()
@@ -465,9 +455,9 @@ def test_teardown_keeps_lock_inode_and_releases_it(fake_environment: FakeEnviron
     """Deleting a held lock path cannot create a second writer domain during teardown."""
 
     _setup(fake_environment)
-    paths = build_paths(fake_environment.repo_root, fake_environment.home)
+    paths = build_paths(fake_environment.home)
     inode = (paths.state_dir / "manager.lock").stat().st_ino
-    assert main(["teardown", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["teardown", "--yes"]) == 0
     assert (paths.state_dir / "manager.lock").stat().st_ino == inode
     assert not paths.state_file.exists()
     with ManagerWriterLock(paths):
@@ -477,7 +467,7 @@ def test_teardown_keeps_lock_inode_and_releases_it(fake_environment: FakeEnviron
 def test_lock_releases_after_failure(fake_environment: FakeEnvironment) -> None:
     """Process-owned lock release does not require manual stale-file removal."""
 
-    paths = build_paths(fake_environment.repo_root, fake_environment.home)
+    paths = build_paths(fake_environment.home)
     with pytest.raises(RuntimeError), ManagerWriterLock(paths):
         raise RuntimeError("workflow failed")
     with ManagerWriterLock(paths):

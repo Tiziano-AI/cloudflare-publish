@@ -165,7 +165,7 @@ def test_legacy_manifest_without_pending_still_loads(tmp_path):
 
 
 def test_final_cli_handoff_loss_reports_already_applied_state(tmp_path: Path, monkeypatch):
-    runtime = build_cli_runtime(repo_root=tmp_path, home=tmp_path)
+    runtime = build_cli_runtime(home=tmp_path)
 
     def unavailable(**kwargs):
         raise AppError("Secret unavailable")

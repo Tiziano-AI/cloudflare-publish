@@ -26,7 +26,6 @@ def test_setup_requires_takeover_for_conflicting_local_state(
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
     assert exit_code == 1
     assert not (
@@ -54,7 +53,6 @@ def test_setup_takeover_bootstraps_manager(fake_environment: FakeEnvironment) ->
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
     assert exit_code == 0
     state_file = (
@@ -104,7 +102,6 @@ def test_setup_install_deps_uses_brew_when_cloudflared_is_missing(
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
     assert exit_code == 0
     assert fake_environment.tool_state()["brew_calls"] == 1
@@ -169,7 +166,7 @@ def test_setup_refresh_only_refuses_initial_bootstrap(
 ) -> None:
     """Refresh-only setup cannot create the initial remote manager."""
 
-    exit_code = main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root)
+    exit_code = main(["setup", "--refresh-only"])
 
     assert exit_code == 1
     captured = capsys.readouterr()
@@ -193,7 +190,7 @@ def test_setup_refresh_only_prefers_missing_manager_state_over_tool_checks(
     tool_state["cloudflared_version"] = "cloudflared version 2025.3.9"
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 1
+    assert main(["setup", "--refresh-only"]) == 1
     captured = capsys.readouterr()
     assert "Setup refresh requires existing local manager state." in captured.err
     assert "2026.10.3 or later is required" not in captured.err
@@ -216,7 +213,7 @@ def test_setup_refresh_only_repairs_existing_manager(
     )
     token_path.write_text("stale-local-token\n", encoding="utf-8")
 
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 0
+    assert main(["setup", "--refresh-only"]) == 0
     repaired_state = fake_environment.tool_state()
     assert repaired_state["cloudflare"]["tunnel_configurations"][tunnel_id]["config"] == {
         "ingress": [{"service": "http_status:404"}]
@@ -233,7 +230,7 @@ def test_setup_refresh_waits_for_launchd_bootout_settlement(
     assert _setup(fake_environment) == 0
     fake_environment.linger_after_bootout(2)
 
-    assert main(["setup", "--refresh-only"], repo_root=fake_environment.repo_root) == 0
+    assert main(["setup", "--refresh-only"]) == 0
     assert "com.cloudflare-publish.cloudflared" in fake_environment.launchd_labels()
 
 
@@ -284,7 +281,6 @@ def test_publish_update_remove_and_verify(fake_environment: FakeEnvironment) -> 
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -305,7 +301,6 @@ def test_publish_update_remove_and_verify(fake_environment: FakeEnvironment) -> 
                 "example.com",
                 "--no-tls-verify",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -325,11 +320,10 @@ def test_publish_update_remove_and_verify(fake_environment: FakeEnvironment) -> 
                 "--allow-email",
                 "ops@example.com",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
-    assert main(["verify", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["verify", "--live"]) == 0
 
     manifest = _load_manifest(fake_environment)
     assert set(manifest["publications"]) == {"grafana", "dashboard"}
@@ -342,7 +336,7 @@ def test_publish_update_remove_and_verify(fake_environment: FakeEnvironment) -> 
         "grafana.example.com",
     ]
 
-    assert main(["rm", "apply", "dashboard", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["rm", "apply", "dashboard", "--yes"]) == 0
     manifest = _load_manifest(fake_environment)
     assert set(manifest["publications"]) == {"grafana"}
     ingress = fake_environment.tool_state()["cloudflare"]["tunnel_configurations"][tunnel_id][
@@ -362,7 +356,7 @@ def test_verify_fails_when_cloudflared_is_too_old(
     tool_state["cloudflared_version"] = "cloudflared version 2026.10.2"
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["verify"], repo_root=fake_environment.repo_root) == 1
+    assert main(["verify"]) == 1
     captured = capsys.readouterr()
     assert "[FAIL] cloudflared meets security minimum" in captured.out
     assert "cloudflared version 2026.10.2" in captured.out
@@ -391,7 +385,6 @@ def test_publish_persists_manifest_before_tunnel_config_push(
             "--audience",
             "machine",
         ],
-        repo_root=fake_environment.repo_root,
     )
     assert first_exit == 1
     manifest = _load_manifest(fake_environment)
@@ -412,7 +405,6 @@ def test_publish_persists_manifest_before_tunnel_config_push(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -437,7 +429,7 @@ def test_guard_status_reports_exempted_zones(
     ]
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["guard", "status"], repo_root=fake_environment.repo_root) == 0
+    assert main(["guard", "status"]) == 0
     captured = capsys.readouterr()
     assert "Require Access protection: enabled" in captured.out
     assert "Exempted zones: public.example.com" in captured.out
@@ -452,14 +444,14 @@ def test_guard_status_reports_disabled_risk_and_plan_command(
     assert _setup(fake_environment) == 0
     _ = capsys.readouterr()
 
-    assert main(["guard", "status"], repo_root=fake_environment.repo_root) == 0
+    assert main(["guard", "status"]) == 0
     human = capsys.readouterr()
     assert "Require Access protection: disabled" in human.out
     assert "Risk: hostnames without a matching Access application" in human.out
     assert "Next: cloudflare-publish guard plan" in human.out
     assert "Apply: cloudflare-publish guard apply --yes" in human.out
 
-    assert main(["--json", "guard", "status"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "guard", "status"]) == 0
     payload = json.loads(capsys.readouterr().out)
     organization = payload["data"]["organization"]
     assert organization["deny_unmatched_requests"] is False
@@ -482,7 +474,6 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
 

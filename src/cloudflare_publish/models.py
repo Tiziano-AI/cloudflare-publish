@@ -38,9 +38,8 @@ class ConnectorStatus:
 
 @dataclass(frozen=True)
 class AppPaths:
-    """Canonical local filesystem paths owned or inspected by the repo."""
+    """Canonical local filesystem paths owned or inspected by the manager."""
 
-    repo_root: Path
     home: Path
     host_platform: HostPlatform
     service_dir: Path

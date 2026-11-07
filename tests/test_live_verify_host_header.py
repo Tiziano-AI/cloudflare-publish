@@ -33,13 +33,12 @@ def test_verify_models_effective_tunnel_host_header(
                 "--verify-path",
                 "/api/tags",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["--json", "verify", "ollama", "--live"], repo_root=fake_environment.repo_root) == 1
+    assert main(["--json", "verify", "ollama", "--live"]) == 1
     failed = json.loads(capsys.readouterr().out)
     assert failed["output_class"] == "evidence_error"
     checks = {check["label"]: check for check in failed["data"]["checks"]}
@@ -66,13 +65,12 @@ def test_verify_models_effective_tunnel_host_header(
                 "--http-host-header",
                 "127.0.0.1",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["--json", "verify", "ollama", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "verify", "ollama", "--live"]) == 0
     passed = json.loads(capsys.readouterr().out)
     passed_checks = {check["label"]: check for check in passed["data"]["checks"]}
     assert passed_checks["ollama: authenticated request succeeds"]["ok"] is True
@@ -91,5 +89,4 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )

@@ -95,7 +95,6 @@ def test_publish_preflights_unmanaged_dns_before_auth_mutations(
             "--audience",
             "machine",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
     assert exit_code == 1
@@ -131,7 +130,6 @@ def test_publish_hands_off_machine_secret_but_requires_explicit_missing_secret_r
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -160,7 +158,6 @@ def test_publish_hands_off_machine_secret_but_requires_explicit_missing_secret_r
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 1
     )
@@ -170,7 +167,7 @@ def test_publish_hands_off_machine_secret_but_requires_explicit_missing_secret_r
     assert "Service token client secret:" not in captured.out
     assert fake_environment.tool_state()["cloudflare"]["next_ids"]["secret"] == 2
     assert _load_manifest(fake_environment)["pending"] is None
-    assert main(["token", "rotate", "grafana", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["token", "rotate", "grafana", "--yes"]) == 0
     captured = capsys.readouterr()
     assert "Client secret: secret-2" in captured.out
     assert fake_environment.tool_state()["keychain"][f"cloudflare-publish:{account}"] == "secret-2"
@@ -196,7 +193,6 @@ def test_remove_retries_cleanly_after_tunnel_config_failure(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -204,7 +200,7 @@ def test_remove_retries_cleanly_after_tunnel_config_failure(
     tool_state["cloudflare"]["fail_tunnel_config_put_once"] = True
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["rm", "apply", "grafana", "--yes"], repo_root=fake_environment.repo_root) == 1
+    assert main(["rm", "apply", "grafana", "--yes"]) == 1
     manifest = _load_manifest(fake_environment)
     assert "grafana" in manifest["publications"]
     tool_state = fake_environment.tool_state()
@@ -212,7 +208,7 @@ def test_remove_retries_cleanly_after_tunnel_config_failure(
     assert tool_state["cloudflare"]["access_apps"]
     assert tool_state["cloudflare"]["service_tokens"]
 
-    assert main(["rm", "apply", "grafana", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["rm", "apply", "grafana", "--yes"]) == 0
     manifest = _load_manifest(fake_environment)
     assert manifest["publications"] == {}
     tool_state = fake_environment.tool_state()
@@ -234,7 +230,7 @@ def test_guard_enable_preserves_unrelated_organization_fields(
     tool_state["cloudflare"]["organization"]["is_ui_read_only"] = True
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["guard", "apply", "--yes"], repo_root=fake_environment.repo_root) == 0
+    assert main(["guard", "apply", "--yes"]) == 0
     organization = fake_environment.tool_state()["cloudflare"]["organization"]
     assert organization["deny_unmatched_requests"] is True
     assert organization["deny_unmatched_requests_exempted_zone_names"] == ["public.example.com"]
@@ -263,11 +259,10 @@ def test_human_publication_round_trip_is_supported(
                 "--allow-domain",
                 "example.com",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
-    assert main(["verify", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["verify", "--live"]) == 0
     manifest = _load_manifest(fake_environment)
     state = manifest["publications"]["portal"]["state"]
     assert state["service_token_id"] is None
@@ -295,7 +290,6 @@ def test_public_publication_round_trip_uses_no_access_resources(
                 "--audience",
                 "public",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -315,12 +309,11 @@ def test_public_publication_round_trip_uses_no_access_resources(
     assert tool_state["cloudflare"]["access_apps"] == {}
     assert tool_state["cloudflare"]["access_policies"] == {}
     assert tool_state["cloudflare"]["service_tokens"] == {}
-    assert main(["verify", "video-ingress", "--live"], repo_root=fake_environment.repo_root) == 0
+    assert main(["verify", "video-ingress", "--live"]) == 0
 
     assert (
         main(
             ["rm", "apply", "video-ingress", "--yes"],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -347,7 +340,7 @@ def test_publication_can_transition_between_public_and_machine_access(
         "http://127.0.0.1:4751",
         "--audience",
     ]
-    assert main([*common, "machine"], repo_root=fake_environment.repo_root) == 0
+    assert main([*common, "machine"]) == 0
     assert fake_environment.tool_state()["cloudflare"]["access_apps"]
     _ = capsys.readouterr()
 
@@ -365,7 +358,6 @@ def test_publication_can_transition_between_public_and_machine_access(
                 "--audience",
                 "public",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -388,7 +380,7 @@ def test_publication_can_transition_between_public_and_machine_access(
     assert "delete service-token stored secret" in public_effects
     assert "create Access application with a distinct AUD" not in public_effects
 
-    assert main([*common, "public"], repo_root=fake_environment.repo_root) == 0
+    assert main([*common, "public"]) == 0
     tool_state = fake_environment.tool_state()
     assert tool_state["cloudflare"]["access_apps"] == {}
     assert tool_state["cloudflare"]["access_policies"] == {}
@@ -413,7 +405,6 @@ def test_publication_can_transition_between_public_and_machine_access(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -432,7 +423,7 @@ def test_publication_can_transition_between_public_and_machine_access(
         < machine_effects.index("retire superseded owned resources and commit publication state")
     )
 
-    assert main([*common, "machine"], repo_root=fake_environment.repo_root) == 0
+    assert main([*common, "machine"]) == 0
     tool_state = fake_environment.tool_state()
     assert tool_state["cloudflare"]["access_apps"]
     assert tool_state["cloudflare"]["access_policies"]
@@ -463,7 +454,6 @@ def test_public_publication_is_denied_when_account_guard_would_block_it(
                 "--audience",
                 "public",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 1
     )
@@ -495,7 +485,6 @@ def test_verify_detects_guard_drift_that_blocks_a_public_publication(
                 "--audience",
                 "public",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -504,7 +493,7 @@ def test_verify_detects_guard_drift_that_blocks_a_public_publication(
     _write_tool_state(fake_environment, tool_state)
     _ = capsys.readouterr()
 
-    assert main(["verify", "video-ingress"], repo_root=fake_environment.repo_root) == 1
+    assert main(["verify", "video-ingress"]) == 1
     captured = capsys.readouterr()
     assert "[FAIL] video-ingress: public guard is compatible" in captured.out
     assert "account require-protection blocks this public publication" in captured.out
@@ -523,7 +512,7 @@ def test_verify_fails_when_remote_tunnel_is_down(
     tool_state["cloudflare"]["tunnels"][tunnel_id]["status"] = "down"
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["verify"], repo_root=fake_environment.repo_root) == 1
+    assert main(["verify"]) == 1
     captured = capsys.readouterr()
     assert "[FAIL] remote tunnel reachable" in captured.out
     assert "status=down" in captured.out
@@ -542,7 +531,7 @@ def test_verify_reports_missing_remote_tunnel_without_aborting(
     tool_state["cloudflare"]["tunnels"].pop(tunnel_id, None)
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["verify"], repo_root=fake_environment.repo_root) == 1
+    assert main(["verify"]) == 1
     captured = capsys.readouterr()
     assert "[FAIL] remote tunnel reachable" in captured.out
     assert "[OK] Zero Trust organization reachable" in captured.out
@@ -573,7 +562,6 @@ def test_verify_detects_tunnel_config_and_policy_precedence_drift(
                 "--http-host-header",
                 "grafana.internal",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -589,7 +577,7 @@ def test_verify_detects_tunnel_config_and_policy_precedence_drift(
         tool_state["cloudflare"]["access_policies"][policy_id]["precedence"] = 9
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["verify"], repo_root=fake_environment.repo_root) == 1
+    assert main(["verify"]) == 1
     captured = capsys.readouterr()
     assert "[FAIL] remote tunnel config matches local state" in captured.out
     assert "[FAIL] grafana: Access policies match state" in captured.out
@@ -618,7 +606,6 @@ def test_verify_detects_remote_dns_app_and_policy_drift(
                 "--allow-domain",
                 "example.com",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -636,7 +623,7 @@ def test_verify_detects_remote_dns_app_and_policy_drift(
         policy["include"] = [{"email_domain": {"domain": "wrong.example.com"}}]
     _write_tool_state(fake_environment, tool_state)
 
-    assert main(["verify"], repo_root=fake_environment.repo_root) == 1
+    assert main(["verify"]) == 1
     captured = capsys.readouterr()
     assert "[FAIL] grafana: DNS record matches state" in captured.out
     assert "[FAIL] grafana: Access app matches state" in captured.out
@@ -656,7 +643,6 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )
 
 

@@ -40,13 +40,12 @@ def test_inspect_renders_operator_contract_without_secrets(
                 "origin.internal",
                 "--no-tls-verify",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["inspect", "dashboard"], repo_root=fake_environment.repo_root) == 0
+    assert main(["inspect", "dashboard"]) == 0
     captured = capsys.readouterr()
     assert "Public verify URL: https://dashboard.example.com/healthz" in captured.out
     assert "Origin: https://127.0.0.1:8443" in captured.out
@@ -83,13 +82,12 @@ def test_inspect_reports_tls_not_applicable_for_plain_http(
                 "--audience",
                 "machine",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
     _ = capsys.readouterr()
 
-    assert main(["inspect", "grafana"], repo_root=fake_environment.repo_root) == 0
+    assert main(["inspect", "grafana"]) == 0
     captured = capsys.readouterr()
     assert "Origin: http://127.0.0.1:3000" in captured.out
     assert "Origin TLS verification: not applicable" in captured.out
@@ -108,5 +106,4 @@ def _setup(fake_environment: FakeEnvironment) -> int:
             "--zone",
             "example.com",
         ],
-        repo_root=fake_environment.repo_root,
     )

@@ -17,7 +17,8 @@ deploy application code into Cloudflare compute.
 ## Canonical ownership
 
 - operator CLI: PATH-global `cloudflare-publish`
-- development wrapper: `bin/cloudflare-publish` from the checked-out product repository
+- development: `uv run cloudflare-publish` from the checked-out product repository, never the
+  operator runtime
 - install posture: the host owns this skill-only plugin; install the CLI separately with
   `uv tool install --reinstall .` from an explicitly resolved source or plugin package root. Installing the
   plugin does not install the CLI, cloudflared, credentials, services, or Cloudflare resources.

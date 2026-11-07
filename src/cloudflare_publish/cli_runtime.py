@@ -26,12 +26,11 @@ class CliRuntime:
     launchd: ConnectorService
 
 
-def build_cli_runtime(*, repo_root: Path | None, home: Path | None) -> CliRuntime:
+def build_cli_runtime(*, home: Path | None) -> CliRuntime:
     """Build the shared runtime bundle."""
 
-    resolved_repo_root = Path.cwd() if repo_root is None else repo_root
     resolved_home = Path.home() if home is None else home
-    paths = build_paths(repo_root=resolved_repo_root, home=resolved_home)
+    paths = build_paths(home=resolved_home)
     runner = CommandRunner()
     return CliRuntime(
         paths=paths,

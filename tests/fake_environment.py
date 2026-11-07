@@ -34,7 +34,6 @@ from tests.fake_tool_scripts import (
 class FakeEnvironment:
     """Hermetic temporary paths and fake-tool state."""
 
-    repo_root: Path
     home: Path
     bin_dir: Path
     state_file: Path
@@ -198,8 +197,6 @@ def make_fake_environment(
     # rejects symlink components; tests must not weaken that contract for fake HOME.
     tmp_path = tmp_path.resolve()
 
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
     home = tmp_path / "home"
     home.mkdir()
     bin_dir = tmp_path / "bin"
@@ -227,9 +224,7 @@ def make_fake_environment(
     write_executable(bin_dir / "systemctl", systemctl_script())
     write_executable(bin_dir / "loginctl", loginctl_script())
     write_executable(bin_dir / "lsof", lsof_script())
-    environment = FakeEnvironment(
-        repo_root=repo_root, home=home, bin_dir=bin_dir, state_file=state_file
-    )
+    environment = FakeEnvironment(home=home, bin_dir=bin_dir, state_file=state_file)
     if platform == "linux":
         state = environment.tool_state()
         state["record_native_calls"] = True

@@ -32,7 +32,7 @@ def test_ssh_inspect_json_exposes_native_client_trust_not_http_probe_fields(
     _install_ssh_publication(fake_environment)
     _ = capsys.readouterr()
 
-    assert main(["--json", "inspect", "mac"], repo_root=fake_environment.repo_root) == 0
+    assert main(["--json", "inspect", "mac"]) == 0
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert payload["output_class"] == "public_diagnostic"
@@ -64,7 +64,7 @@ def test_ssh_inspect_human_has_no_http_or_origin_tls_claims(
     _install_ssh_publication(fake_environment)
     _ = capsys.readouterr()
 
-    assert main(["inspect", "mac"], repo_root=fake_environment.repo_root) == 0
+    assert main(["inspect", "mac"]) == 0
     output = capsys.readouterr().out
     assert f"Pinned SSH host key: {_HOST_KEY}" in output
     assert f"SSH known_hosts line: mac.example.com {_HOST_KEY}" in output
@@ -189,7 +189,6 @@ def test_ssh_discovery_sanitizes_service_and_keeps_other_protocols_unsupported(
                 "--zone-id",
                 "zone-123",
             ],
-            repo_root=fake_environment.repo_root,
         )
         == 0
     )
@@ -205,7 +204,7 @@ def test_ssh_discovery_sanitizes_service_and_keeps_other_protocols_unsupported(
     assert "hidden-" not in captured.out
     assert captured.err == ""
     assert fake_environment.tool_state() == before
-    paths = build_paths(repo_root=fake_environment.repo_root, home=fake_environment.home)
+    paths = build_paths(home=fake_environment.home)
     manifest = load_manifest(paths.state_file)
     assert manifest is not None
     assert manifest.publications == {}
@@ -217,7 +216,6 @@ def _setup(environment: FakeEnvironment) -> None:
     assert (
         main(
             ["setup", "--api-token", "token-1", "--account-id", "acc-123", "--zone", "example.com"],
-            repo_root=environment.repo_root,
         )
         == 0
     )
@@ -227,7 +225,7 @@ def _install_ssh_publication(environment: FakeEnvironment) -> None:
     """Seed typed local ownership without exercising another worker's publish flow."""
 
     _setup(environment)
-    paths = build_paths(repo_root=environment.repo_root, home=environment.home)
+    paths = build_paths(home=environment.home)
     manifest = load_manifest(paths.state_file)
     assert manifest is not None
     write_manifest(paths.state_file, replace(manifest, publications={"mac": _ssh_publication()}))
