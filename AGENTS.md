@@ -115,6 +115,8 @@ hardware qualification or an architecture restriction. The operator supplies mat
 
 ## Entry points and installation
 
+Follow the shared [release convention](https://github.com/Tiziano-AI/plugins/blob/main/AGENTS.md#release-convention).
+
 - The installed PATH-global `cloudflare-publish` console script is the operator entrypoint.
   Development runs the working tree with `uv run cloudflare-publish ...` from the checkout, or
   `uv run --project <checkout> cloudflare-publish ...` from elsewhere so relative paths keep the
