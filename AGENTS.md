@@ -54,7 +54,8 @@ hardware qualification or an architecture restriction. The operator supplies mat
 - `src/cloudflare_publish/cli_parser.py` owns command syntax. `cli.py` dispatches to
   `cli_read_commands.py` and `cli_write_commands.py`, and focused `*_flow.py` modules own workflow
   behavior. The dispatch filenames do not classify effects: the read module also runs
-  `service start`, `stop` and `restart`, and the write module also handles the read-only `publish`,
+  `service start`, `stop` and `restart` and the confirmed `repair resolve` and
+  `repair retire-token` writes, and the write module also handles the read-only `publish`,
   `rm`, `guard` and `tunnel recover` plan forms and `guard status`. Judge a command's effect by its
   exact subcommand and workflow.
 - `cli_output.py` owns the JSON envelope and its output classes.
